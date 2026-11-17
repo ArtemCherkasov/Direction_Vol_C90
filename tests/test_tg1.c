@@ -105,9 +105,9 @@ int test_tg1_run(void) {
     for (i = 0; i < split.test->num_samples; i++) vol_preds[i] = 0.01;
 
     memset(&cfg, 0, sizeof(cfg));
-    cfg.cost_spread = 0.0; cfg.cost_commission = 0.0;
+    cfg.cost_spread = 0.0001; cfg.cost_commission = 0.0;
     cfg.pip_value = 0.0001; cfg.threshold_k = 0.0;
-    cfg.hold_bars = h; cfg.max_position_size = 1.0; cfg.target_risk = 0.02;
+    cfg.hold_bars = h; cfg.max_position_size = 1.0; cfg.target_risk = 0.002;
 
     br = backtest_run(net, split.test, raw, num_raw,
                       split.train->num_samples, vol_preds, &cfg);
@@ -118,6 +118,22 @@ int test_tg1_run(void) {
 
     printf("  Acc=%.1f%% WR=%.1f%% PF=%.2f trades=%d val_loss=%.4f\n",
            acc * 100.0, wr * 100.0, pf, br.num_trades, tr.best_val_loss);
+
+    /* Hard assert: on pure noise with risk=0.2%, |window P&L| must be <= 5% */
+    printf("  Risk-channel: |window P&L|=%.4f%% (limit 5%%)\n",
+           fabs(br.trading.net_pnl_pct) * 100.0);
+    if (fabs(br.trading.net_pnl_pct) > 0.05) {
+        fprintf(stderr, "  FAIL: |window P&L|=%.4f%% > 5%% on pure noise (risk=0.2%%)\n",
+                fabs(br.trading.net_pnl_pct) * 100.0);
+        backtest_free_result(&br);
+        free(vol_preds);
+        lstm_free(net);
+        data_free_val_split(&vs);
+        data_free_split(&split);
+        data_free_dataset(ds);
+        free(raw);
+        return 1;
+    }
 
     backtest_free_result(&br);
     free(vol_preds);

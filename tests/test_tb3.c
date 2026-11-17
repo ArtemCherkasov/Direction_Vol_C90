@@ -34,15 +34,15 @@ int test_tb3_run(void) {
     for (i = 0; i < ds->num_samples; i++) vol_preds[i] = 0.01;
 
     memset(&cfg, 0, sizeof(cfg));
-    cfg.cost_spread = 1.0; cfg.cost_commission = 0.2;
+    cfg.cost_spread = 0.00008; cfg.cost_commission = 0.00003;
     cfg.pip_value = 0.0001; cfg.threshold_k = 2.0;
     cfg.hold_bars = h; cfg.max_position_size = 1.0; cfg.target_risk = 0.02;
 
     br = backtest_run(net, ds, raw, num_raw, 0, vol_preds, &cfg);
 
-    /* Expected: cost_fraction = (1.0 + 2*0.2) * 0.0001 / 1.0 = 0.00014 */
+    /* Expected: cost_fraction = spread + 2*commission = 0.00008 + 2*0.00003 = 0.00014 */
     cost_pips = cfg.cost_spread + 2.0 * cfg.cost_commission;
-    cost_fraction = cost_pips * cfg.pip_value / 1.0;
+    cost_fraction = cost_pips;  /* direct fraction, no pip_value/price conversion */
     pos_size = cfg.target_risk / 0.01;  /* 2.0 */
     if (pos_size > cfg.max_position_size) pos_size = cfg.max_position_size;  /* 1.0 */
     exp_pnl_per_trade = -cost_fraction * pos_size;

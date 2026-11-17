@@ -38,9 +38,9 @@ int test_tg3_run(void) {
     pf.has_momentum = 1; pf.momentum = 0.9;
     pf.has_wd = 1; pf.wd = 0.0001;
     pf.has_val_ratio = 1; pf.val_ratio = 0.15;
-    pf.has_cost_spread = 1; pf.cost_spread = 1.0;
-    pf.has_cost_commission = 1; pf.cost_commission = 0.2;
-    pf.has_threshold_k = 1; pf.threshold_k = 2.0;
+    pf.has_cost_spread = 1; pf.cost_spread = 0.0001;
+    pf.has_cost_commission = 1; pf.cost_commission = 0.0;
+    pf.has_threshold_k = 1; pf.threshold_k = 0.0;
     strcpy(pf.vol_mode, "ewma"); pf.has_vol_mode = 1;
     pf.has_ewma_lambda = 1; pf.ewma_lambda = 0.94;
 

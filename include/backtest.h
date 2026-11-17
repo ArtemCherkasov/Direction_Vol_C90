@@ -8,9 +8,9 @@
 
 /* ==================== Backtest Config ==================== */
 typedef struct {
-    double cost_spread;      /* pips, e.g. 1.0 for EURUSD */
-    double cost_commission;  /* pips per side, e.g. 0.2 */
-    double pip_value;        /* pip size, e.g. 0.0001 for EURUSD */
+    double cost_spread;      /* fraction per trade, e.g. 0.0001 = 1bp */
+    double cost_commission;  /* fraction per side, e.g. 0.0 */
+    double pip_value;        /* pip size (legacy, kept for API compat) */
     double threshold_k;      /* k in threshold_offset = cost / (k * sigma) */
     int hold_bars;           /* h: bars to hold (prediction_horizon) */
     double max_position_size;

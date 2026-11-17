@@ -456,21 +456,19 @@ int test_backtest_one_signal_per_bar(void) {
 
 int test_backtest_costs(void) {
     /* Test that costs are properly deducted from P&L */
-    /* cost_fraction = (spread + 2*commission) * pip_value / price
-     * For EURUSD: spread=1.0, commission=0.2, pip_value=0.0001
-     * cost_pips = 1.0 + 2*0.2 = 1.4
-     * cost_fraction = 1.4 * 0.0001 / price */
-    double spread = 1.0, commission = 0.2, pip_value = 0.0001;
-    double price = 1.1000;
+    /* cost_fraction = spread + 2*commission (direct fraction)
+     * For EURUSD: spread=0.0001, commission=0.0
+     * cost_fraction = 0.0001 + 2*0.0 = 0.0001 (1bp) */
+    double spread = 0.0001, commission = 0.0;
     double cost_pips, cost_fraction;
 
     cost_pips = spread + 2.0 * commission;
-    cost_fraction = cost_pips * pip_value / price;
+    cost_fraction = cost_pips;  /* direct fraction */
 
-    /* cost_pips should be 1.4 */
-    if (fabs(cost_pips - 1.4) > 1e-6) return 0;
+    /* cost_pips should be 0.0001 */
+    if (fabs(cost_pips - 0.0001) > 1e-9) return 0;
 
-    /* cost_fraction should be 1.4 * 0.0001 / 1.1 = 0.00012727... */
+    /* cost_fraction should be 0.0001 (1bp) */
     if (cost_fraction <= 0.0) return 0;
 
     return 1;

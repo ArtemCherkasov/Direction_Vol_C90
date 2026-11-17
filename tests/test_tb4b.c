@@ -2,8 +2,8 @@
  * T-B4b: Dynamic vol threshold — verify the gate CAN block trades.
  * With high threshold_k and low vol, the vol filter should skip trades
  * where k*sigma < cost_fraction.
- * Config: cost_spread=1.0, commission=0.2, pip_value=0.0001, price~1.0
- *   cost_fraction = (1.0 + 0.4) * 0.0001 / 1.0 = 0.00014
+ * Config: cost_spread=0.00014, commission=0.0 (direct fraction), price~1.0
+ *   cost_fraction = 0.00014 + 2*0.0 = 0.00014
  * With vol=0.001 and threshold_k=100: k*sigma = 0.1 >> cost → trades
  * With vol=0.001 and threshold_k=0.1: k*sigma = 0.0001 < cost → blocked
  */
@@ -38,13 +38,13 @@ int test_tb4b_run(void) {
 
     /* --- Case 1: threshold_k high → k*sigma >> cost → all trade --- */
     memset(&cfg, 0, sizeof(cfg));
-    cfg.cost_spread = 1.0; cfg.cost_commission = 0.2;
+    cfg.cost_spread = 0.00014; cfg.cost_commission = 0.0;
     cfg.pip_value = 0.0001; cfg.threshold_k = 100.0;  /* 100 * 0.001 = 0.1 >> 0.00014 */
     cfg.hold_bars = h; cfg.max_position_size = 1.0; cfg.target_risk = 0.02;
 
     br = backtest_run(net, ds, raw, num_raw, 0, vol_preds, &cfg);
     printf("  Case 1 (k=100, vol=0.001): k*sigma=%.4f >> cost=%.6f → trades=%d\n",
-           cfg.threshold_k * 0.001, (1.0 + 0.4) * 0.0001 / 1.0, br.num_trades);
+           cfg.threshold_k * 0.001, 0.00014, br.num_trades);
     ASSERT_TRUE(br.num_trades > 0);  /* gate open */
     backtest_free_result(&br);
 
@@ -53,7 +53,7 @@ int test_tb4b_run(void) {
 
     br = backtest_run(net, ds, raw, num_raw, 0, vol_preds, &cfg);
     printf("  Case 2 (k=0.1, vol=0.001): k*sigma=%.6f < cost=%.6f → trades=%d\n",
-           cfg.threshold_k * 0.001, (1.0 + 0.4) * 0.0001 / 1.0, br.num_trades);
+           cfg.threshold_k * 0.001, 0.00014, br.num_trades);
     ASSERT_INT(br.num_trades, 0);  /* gate closed */
     backtest_free_result(&br);
 

@@ -131,13 +131,13 @@ WalkFwdResult walkfwd_run(DataRow *raw, int num_raw,
         /* Backtest config */
         {
             BacktestConfig bt_cfg;
-            bt_cfg.cost_spread = params->has_cost_spread ? params->cost_spread : 1.0;
-            bt_cfg.cost_commission = params->has_cost_commission ? params->cost_commission : 0.2;
+            bt_cfg.cost_spread = params->has_cost_spread ? params->cost_spread : 0.0001;
+            bt_cfg.cost_commission = params->has_cost_commission ? params->cost_commission : 0.0;
             bt_cfg.pip_value = 0.0001;
-            bt_cfg.threshold_k = params->has_threshold_k ? params->threshold_k : 2.0;
-            bt_cfg.hold_bars = pred_horizon;
-            bt_cfg.max_position_size = 5.0;
-            bt_cfg.target_risk = 0.02;
+            bt_cfg.threshold_k = params->has_threshold_k ? params->threshold_k : 0.0;
+            bt_cfg.hold_bars = pred_horizon;   /* h=1 for baseline measurement */
+            bt_cfg.max_position_size = 1.0;
+            bt_cfg.target_risk = 0.002;
 
             for (w = 0; w < num_windows; w++) {
                 int tr_s, tr_e, te_s, te_e;
@@ -390,7 +390,7 @@ WalkFwdResult walkfwd_run(DataRow *raw, int num_raw,
                 wfr.aggregate.num_trades = total_trades;
 
                 wfr.worst = tm_arr[worst_idx];
-                wfr.criteria_met = metrics_check_criteria(&wfr.aggregate);
+                wfr.criteria_met = metrics_check_criteria(&wfr.worst);
 
                 free(tm_arr);
             }
@@ -441,5 +441,5 @@ void walkfwd_print_report(const WalkFwdResult *result) {
         free(tm_arr);
     }
 
-    metrics_print_verdict(&result->aggregate);
+    metrics_print_verdict(&result->worst);
 }

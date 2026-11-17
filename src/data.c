@@ -93,6 +93,21 @@ int data_load_raw(const char *filepath, DataRow **out_rows, int *out_count) {
             p = find_field_end(p); p = skip_quotes(p); rows[count].tickvol = atoi(p);
             p = find_field_end(p); p = skip_quotes(p); rows[count].vol = atoi(p);
             p = find_field_end(p); p = skip_quotes(p); rows[count].spread = atoi(p);
+
+            /* OHLC validation: reject malformed rows (missing column, zero price, etc.) */
+            {
+                double mx = (rows[count].open > rows[count].close) ? rows[count].open : rows[count].close;
+                double mn = (rows[count].open < rows[count].close) ? rows[count].open : rows[count].close;
+                double tol = 1e-5;
+                if (rows[count].open <= 0.0 || rows[count].close <= 0.0 ||
+                    rows[count].high < mx - tol || rows[count].low > mn + tol ||
+                    rows[count].high < rows[count].low - tol) {
+                    fprintf(stderr, "Error: invalid OHLC in %s line %d: O=%.5f H=%.5f L=%.5f C=%.5f\n",
+                            filepath, count + 2, rows[count].open, rows[count].high,
+                            rows[count].low, rows[count].close);
+                    free(rows); fclose(f); return -1;
+                }
+            }
             count++;
         }
     }

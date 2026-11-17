@@ -1,8 +1,8 @@
 /*
  * T-D2: Data field validation.
  * Part 1: Valid file — assert high >= max(o,c), low <= min(o,c), o,c > 0 for all rows.
- * Part 2: Broken file (missing column → atof returns 0) — document that loader
- *         has no validation: the broken field is silently 0, OHLC invariant violated.
+ * Part 2: Broken file (missing column → atof returns 0) — loader now validates OHLC
+ *         and rejects the broken file (returns non-zero).
  */
 #include "test_common.h"
 
@@ -47,20 +47,15 @@ int test_td2_run(void) {
     fclose(f);
 
     rc = data_load_raw(bad_path, &rows, &count);
-    if (rc != 0) { fprintf(stderr, "  FAIL: cannot load bad file\n"); remove(bad_path); return 1; }
-    ASSERT_INT(count, 1);
-
-    /* Document: skip_quotes skips ALL leading tabs, so a missing column is not
-     * detected — the next column's value is read instead. high gets 1.09500
-     * (the LOW value), low gets 1.10200 (the CLOSE value), etc. */
-    ASSERT_APPROX(rows[0].high, 1.09500, 1e-9);  /* shifted: reads LOW as HIGH */
-
-    /* The OHLC invariant is violated: high (1.09500) < open (1.10000) */
-    ASSERT_TRUE(rows[0].high < rows[0].open);  /* documents the bug */
-
-    free(rows);
+    if (rc == 0) {
+        fprintf(stderr, "  FAIL: broken file loaded without error (validation missing)\n");
+        free(rows);
+        remove(bad_path);
+        return 1;
+    }
+    /* rc != 0 → loader rejected invalid OHLC. This is the expected behavior. */
     remove(bad_path);
 
-    printf("T-D2 PASS: valid file OK, broken file documents missing validation (columns shift)\n");
+    printf("T-D2 PASS: valid file loads OK, broken file rejected by loader validation\n");
     return 0;
 }

@@ -23,6 +23,7 @@ typedef struct {
     double avg_pnl_per_trade;
     double win_rate;
     double total_pnl;
+    int invariant_error;  /* 1 if MaxDD < |total_pnl| invariant violated (final_pnl < 0) */
 } TradingMetrics;
 
 TradingMetrics metrics_compute(const Trade *trades, int num_trades,

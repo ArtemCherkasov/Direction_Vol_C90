@@ -59,7 +59,7 @@ BacktestResult backtest_run(LSTMNetwork *net,
         double p;
         double entry_price, exit_price;
         int entry_bar, exit_bar;
-        double cost_pips, cost_fraction, vol_i;
+        double cost_fraction, vol_i;
         int direction = 0;
         double position_size;
 
@@ -87,14 +87,15 @@ BacktestResult backtest_run(LSTMNetwork *net,
             vol_i *= sqrt((double)config->hold_bars);
         }
 
-        /* Cost calculation */
-        cost_pips = config->cost_spread + 2.0 * config->cost_commission;
+        /* Cost calculation — cost_spread is a direct fraction (e.g. 0.0001 = 1bp).
+         * cost_fraction = spread + 2*commission (per round-trip). */
         entry_price = raw[entry_bar].open;
-        cost_fraction = cost_pips * config->pip_value / entry_price;
+        cost_fraction = config->cost_spread + 2.0 * config->cost_commission;
 
         /* Vol cost filter: skip trade if expected movement (k·σ̂) doesn't cover costs.
+         * threshold_k == 0 disables the filter entirely.
          * Fixed p-threshold at 0.5 — no dynamic offset. */
-        if (config->threshold_k * vol_i < cost_fraction)
+        if (config->threshold_k > 0.0 && config->threshold_k * vol_i < cost_fraction)
             continue;  /* vol too low to cover costs */
 
         /* Signal — fixed threshold at 0.5 */
@@ -179,6 +180,16 @@ BacktestResult backtest_run(LSTMNetwork *net,
     {
         double ann_factor = 252.0; /* daily bars per year */
         result.trading = metrics_compute(result.trades, n_trades, ann_factor);
+    }
+
+    /* CHECK-print: verify window P&L equals sum of pnl_fraction */
+    {
+        double sum_pnl = 0.0;
+        int ti;
+        for (ti = 0; ti < n_trades; ti++) sum_pnl += result.trades[ti].pnl_fraction;
+        printf("  CHECK: window P&L=%.6f  sum(pnl_fraction)=%.6f  %s\n",
+               result.trading.net_pnl_pct, sum_pnl,
+               fabs(result.trading.net_pnl_pct - sum_pnl) < 1e-9 ? "OK" : "MISMATCH");
     }
     result.diagnostic = metrics_diagnostic(all_preds, all_targets, test_ds->num_samples);
 

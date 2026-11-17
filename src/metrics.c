@@ -70,9 +70,10 @@ TradingMetrics metrics_compute(const Trade *trades, int num_trades,
     tm.net_pnl_pct = tm.total_pnl;  /* raw cumulative P&L for the window (not annualized) */
 
     /* Invariant: if total P&L is negative, MaxDD must be at least |total_pnl|.
-     * If dd < |final_pnl| - eps, the dd computation is wrong. */
+     * If dd < |final_pnl| - eps, the dd computation is wrong — hard error. */
     if (tm.total_pnl < 0.0 && max_dd < fabs(tm.total_pnl) - 1e-9) {
-        fprintf(stderr, "  WARNING: MaxDD %.6f < |total_pnl| %.6f — dd computation error\n",
+        tm.invariant_error = 1;
+        fprintf(stderr, "  ERROR: MaxDD %.6f < |total_pnl| %.6f — dd computation error\n",
                 max_dd, fabs(tm.total_pnl));
     }
 

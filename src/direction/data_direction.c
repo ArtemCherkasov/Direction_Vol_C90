@@ -17,10 +17,10 @@ Dataset *data_build_dataset_direction_ext(DataRow *raw, int num_raw, int seq_len
         for (s = 0; s < seq_len; s++) {
             int si = i + s;
             for (k = 0; k < prediction_horizon; k++) {
-                int idx_now  = si + k;       /* close[t+k]   */
+                int idx_base = si;           /* close[t]     — cumulative from base */
                 int idx_next = si + 1 + k;   /* close[t+1+k] */
                 ds->labels[i][s * num_outputs + k] =
-                    (raw[idx_next].close > raw[idx_now].close) ? 1.0 : 0.0;
+                    (raw[idx_next].close > raw[idx_base].close) ? 1.0 : 0.0;
             }
         }
     }
