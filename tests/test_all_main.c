@@ -38,6 +38,7 @@ extern int test_tl1_run(void);
 extern int test_tl2_run(void);
 extern int test_tl3_run(void);
 extern int test_tl4_run(void);
+extern int test_tl5_run(void);
 extern int test_tb1_run(void);
 extern int test_tb2_run(void);
 extern int test_tb3_run(void);
@@ -79,6 +80,7 @@ static TestCase tests[] = {
     {"T-L2", test_tl2_run, 0},
     {"T-L3", test_tl3_run, 1},
     {"T-L4", test_tl4_run, 0},
+    {"T-L5", test_tl5_run, 1},
     {"T-B1", test_tb1_run, 0},
     {"T-B2", test_tb2_run, 0},
     {"T-B3", test_tb3_run, 0},

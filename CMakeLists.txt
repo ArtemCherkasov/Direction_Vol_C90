@@ -24,27 +24,6 @@ set(SOURCES
 add_executable(Direction_Vol_C90 ${SOURCES})
 target_link_libraries(Direction_Vol_C90 m)
 
-# Legacy tests
-set(TEST_SOURCES
-    src/utils.c
-    src/data.c
-    src/lstm.c
-    src/model.c
-    src/params.c
-    src/vol.c
-    src/train.c
-    src/backtest.c
-    src/metrics.c
-    src/walkfwd.c
-    src/direction/data_direction.c
-    src/direction/predict_direction.c
-    tests/test_main.c
-    tests/test_impl.c
-)
-
-add_executable(test_dvc90 ${TEST_SOURCES})
-target_link_libraries(test_dvc90 m)
-
 # Unified test runner — all debug tests in one executable
 set(TEST_ALL_SOURCES
     src/utils.c
@@ -84,6 +63,7 @@ set(TEST_ALL_SOURCES
     tests/test_tl2.c
     tests/test_tl3.c
     tests/test_tl4.c
+    tests/test_tl5.c
     tests/test_tb1.c
     tests/test_tb2.c
     tests/test_tb3.c

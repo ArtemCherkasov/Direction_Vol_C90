@@ -243,16 +243,16 @@ WalkFwdResult walkfwd_run(DataRow *raw, int num_raw,
                 train_count = split.train->num_samples;
 
                 /* Construct vol_preds aligned to test samples.
-                 * Test sample i → full_ds sample (train_count + i).
-                 * Entry bar = train_count + i + seq_len.
-                 * Vol known at last feature bar = train_count + i + seq_len - 1.
-                 * vol_preds[i] = vol_sigma[train_count + i + seq_len - 1] */
+                 * Test sample i → full_ds sample (test_start_sample + i).
+                 * Entry bar = test_start_sample + i + seq_len.
+                 * Vol known at last feature bar = test_start_sample + i + seq_len - 1.
+                 * vol_preds[i] = vol_sigma[test_start_sample + i + seq_len - 1] */
                 {
                     int test_ns = split.test->num_samples;
                     int bi;
                     vol_preds = (double *)utils_safe_malloc((size_t)test_ns * sizeof(double));
                     for (bi = 0; bi < test_ns; bi++) {
-                        int bar_idx = train_count + bi + seq_len - 1;
+                        int bar_idx = split.test_start_sample + bi + seq_len - 1;
                         if (bar_idx >= 0 && bar_idx < window_num_rows)
                             vol_preds[bi] = vol_sigma[bar_idx];
                         else
@@ -323,9 +323,10 @@ WalkFwdResult walkfwd_run(DataRow *raw, int num_raw,
                 printf("  Training done: best_epoch=%d  best_val_loss=%.6f  epochs_actual=%d\n",
                        tr.best_epoch, tr.best_val_loss, tr.epochs_actual);
 
-                /* Backtest on test — pass train_count (samples) as offset, not train bars */
+                /* Backtest on test — pass test_start_sample (train_count + purge) as offset.
+                 * Using train_count alone misses the purge gap and causes look-ahead bias. */
                 bt_result = backtest_run(net, split.test, window_raw, window_num_rows,
-                                         train_count, vol_preds, &bt_cfg);
+                                         split.test_start_sample, vol_preds, &bt_cfg);
                 wfr.windows[w].backtest_result = bt_result;
                 printf("  Backtest: %d trades | PF=%.2f | Sharpe=%.2f | MaxDD=%.1f%% | P&L=%.2f%%\n",
                        bt_result.num_trades,

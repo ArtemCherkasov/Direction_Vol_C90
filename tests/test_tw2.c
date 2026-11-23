@@ -36,14 +36,15 @@ int test_tw2_run(void) {
         data_free_dataset(ds); return 1;
     }
 
-    /* In walkfwd.c: raw_offset = train_count (passed to backtest_run) */
-    raw_offset = split.train->num_samples;
+    /* In walkfwd.c: raw_offset = split.test_start_sample (train_count + purge) passed to backtest_run */
+    raw_offset = split.test_start_sample;
 
     printf("  train_samples=%d  test_samples=%d  raw_offset=%d\n",
            split.train->num_samples, split.test->num_samples, raw_offset);
 
-    /* Assert: raw_offset == split.train->num_samples */
-    ASSERT_INT(raw_offset, split.train->num_samples);
+    /* Assert: raw_offset == train_count + purge (seq_len) — accounts for embargo gap */
+    ASSERT_INT(raw_offset, split.train->num_samples + seq);
+    ASSERT_INT(split.test_start_sample, split.train->num_samples + seq);
 
     /* Assert: test sample 0 maps to full_ds sample raw_offset */
     /* Full_ds sample raw_offset has first feature bar = raw_offset */
@@ -57,6 +58,6 @@ int test_tw2_run(void) {
 
     data_free_split(&split);
     data_free_dataset(ds);
-    printf("T-W2 PASS: raw_offset = train_count = %d, entry_bar = offset + seq_len\n", raw_offset);
+    printf("T-W2 PASS: raw_offset = test_start_sample = %d (train_count + purge), entry_bar = offset + seq_len\n", raw_offset);
     return 0;
 }

@@ -568,6 +568,7 @@ DatasetSplit data_split_train_test(Dataset *ds, double train_ratio) {
     int train_count, test_count, i, src;
     int purge;  /* embargo gap to prevent feature overlap at boundary */
     split.train = NULL; split.test = NULL;
+    split.test_start_sample = 0;
     train_count = (int)((double)ds->num_samples * train_ratio);
     if (train_count < 1) train_count = 1;
     if (train_count >= ds->num_samples) train_count = ds->num_samples - 1;
@@ -600,6 +601,8 @@ DatasetSplit data_split_train_test(Dataset *ds, double train_ratio) {
     }
     for (i = 0; i < train_count; i++) { split.train->features[i] = ds->features[i]; split.train->labels[i] = ds->labels[i]; }
     for (i = 0; i < test_count; i++) { src = train_count + purge + i; split.test->features[i] = ds->features[src]; split.test->labels[i] = ds->labels[src]; }
+
+    split.test_start_sample = train_count + purge;
 
     split.train->feat_min = ds->feat_min; split.train->feat_max = ds->feat_max; split.train->feat_names = ds->feat_names;
     split.train->label_min = ds->label_min; split.train->label_max = ds->label_max;

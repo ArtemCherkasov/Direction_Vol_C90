@@ -55,9 +55,11 @@ static double garch_neg_loglik(const double *params, const double *returns, int 
 
     ll = 0.0;
     for (i = 0; i < n; i++) {
-        sigma2 = omega + alpha * returns[i] * returns[i] + beta * sigma2;
+        /* Likelihood of r_i uses σ²_i (conditional on info up to i-1).
+         * Must compute BEFORE updating sigma2 to σ²_{i+1}. */
         if (sigma2 <= 1e-20) sigma2 = 1e-20;
         ll += 0.5 * (log(sigma2) + returns[i] * returns[i] / sigma2);
+        sigma2 = omega + alpha * returns[i] * returns[i] + beta * sigma2;
     }
 
     return ll;

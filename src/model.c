@@ -267,7 +267,7 @@ int model_load(const char *filepath, LSTMNetwork *net) {
                 gate = GATE_FORGET; 
                 matrix_type = MATRIX_TYPE_BIAS;
                 gate_set_count++;
-                continue; 
+                /* Fall through to bias parsing — values are on this same line */
             }
             if (strncmp(line, "input_recurrent:", strlen("input_recurrent:")) == 0) { 
                 gate = GATE_INPUT; 
@@ -285,7 +285,7 @@ int model_load(const char *filepath, LSTMNetwork *net) {
                 gate = GATE_INPUT; 
                 matrix_type = MATRIX_TYPE_BIAS;
                 gate_set_count++;
-                continue; 
+                /* Fall through to bias parsing — values are on this same line */
             }
             if (strncmp(line, "output_recurrent:", strlen("output_recurrent:")) == 0) { 
                 gate = GATE_OUTPUT; 
@@ -303,7 +303,7 @@ int model_load(const char *filepath, LSTMNetwork *net) {
                 gate = GATE_OUTPUT; 
                 matrix_type = MATRIX_TYPE_BIAS;
                 gate_set_count++;
-                continue; 
+                /* Fall through to bias parsing — values are on this same line */
             }
             if (strncmp(line, "candidate_recurrent:", strlen("candidate_recurrent:")) == 0) { 
                 gate = GATE_CANDIDATE; 
@@ -321,7 +321,7 @@ int model_load(const char *filepath, LSTMNetwork *net) {
                 gate = GATE_CANDIDATE; 
                 matrix_type = MATRIX_TYPE_BIAS;
                 gate_set_count++;
-                continue; 
+                /* Fall through to bias parsing — values are on this same line */
             }
 
             /* Row lines: "row[0]: v1 v2 v3 ..." */

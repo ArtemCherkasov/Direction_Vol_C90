@@ -93,6 +93,7 @@ void data_free_dataset(Dataset *ds);
 typedef struct {
     Dataset *train;
     Dataset *test;
+    int test_start_sample;  /* index of first test sample in original dataset (train_count + purge) */
 } DatasetSplit;
 
 DatasetSplit data_split_train_test(Dataset *ds, double train_ratio);

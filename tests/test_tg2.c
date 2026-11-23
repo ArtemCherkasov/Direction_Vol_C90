@@ -47,7 +47,7 @@ int test_tg2_run(void) {
     cfg.hold_bars = h; cfg.max_position_size = 1.0; cfg.target_risk = 0.02;
 
     br = backtest_run(net, split.test, raw, num_raw,
-                      split.train->num_samples, vol_preds, &cfg);
+                      split.test_start_sample, vol_preds, &cfg);
 
     printf("  trades=%d WR=%.1f%% P&L=%.6f\n",
            br.num_trades, br.trading.win_rate * 100.0, br.trading.total_pnl);

@@ -110,7 +110,7 @@ int test_tg1_run(void) {
     cfg.hold_bars = h; cfg.max_position_size = 1.0; cfg.target_risk = 0.002;
 
     br = backtest_run(net, split.test, raw, num_raw,
-                      split.train->num_samples, vol_preds, &cfg);
+                      split.test_start_sample, vol_preds, &cfg);
 
     acc = br.diagnostic.accuracy;
     wr = br.trading.win_rate;

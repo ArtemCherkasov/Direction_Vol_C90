@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <assert.h>
 
 static LSTMCellState *alloc_cell_states_bt(int seq_len, int num_cells, int num_features) {
     LSTMCellState *cs;
@@ -78,6 +79,12 @@ BacktestResult backtest_run(LSTMNetwork *net,
          * Exit at open of bar j+seq_len+hold_bars. */
         entry_bar = raw_offset + i + seq_len;
         if (entry_bar >= num_raw) continue;
+
+        /* Permanent alignment guard: entry must be on the bar AFTER the last feature bar.
+         * Features for sample i span raw bars [raw_offset+i, raw_offset+i+seq_len-1].
+         * entry_bar = raw_offset + i + seq_len must equal last_feat_bar + 1.
+         * This guards against future regressions in the offset arithmetic. */
+        assert(entry_bar == (raw_offset + i + seq_len - 1) + 1);
 
         vol_i = vol_predictions[i];
         if (vol_i < 1e-9) continue;  /* skip bars with zero/near-zero vol (holiday, flat) */

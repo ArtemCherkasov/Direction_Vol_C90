@@ -181,6 +181,15 @@ TrainResult train_run(LSTMNetwork *net,
     free(preds);
     lstm_free_cell_states(cell_states, seq_len);
 
+    /* Reload best weights so callers get the best model, not the last epoch.
+     * Without this, early stopping leaves net with degraded weights. */
+    if (model_path) {
+        if (model_load(model_path, net) != 0) {
+            fprintf(stderr, "Window %d | Warning: failed to reload best model from %s, "
+                   "using last epoch weights\n", window_num, model_path);
+        }
+    }
+
     return tr;
 }
 
