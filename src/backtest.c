@@ -38,6 +38,8 @@ BacktestResult backtest_run(LSTMNetwork *net,
     int n_trades;
     double *all_preds;
     double *all_targets;
+    int n_diag = 0;
+    int n_skip_overlap = 0, n_skip_vol = 0, n_skip_cost = 0, n_skip_oob = 0;
     int n = net->num_cells;
     int combined = n + net->num_features;
 
@@ -60,13 +62,13 @@ BacktestResult backtest_run(LSTMNetwork *net,
     result.trades = (Trade *)utils_safe_calloc((size_t)max_trades, sizeof(Trade));
     n_trades = 0;
 
-    all_preds = (double *)utils_safe_calloc((size_t)test_ds->num_samples, sizeof(double));
-    all_targets = (double *)utils_safe_calloc((size_t)test_ds->num_samples, sizeof(double));
+    all_preds = (double *)utils_safe_calloc((size_t)max_trades, sizeof(double));
+    all_targets = (double *)utils_safe_calloc((size_t)max_trades, sizeof(double));
 
     for (i = 0; i < test_ds->num_samples; i++) {
         double p;
         double entry_price, exit_price;
-        int entry_bar, exit_bar;
+        int entry_bar, exit_bar, last_feat_bar;
         double cost_fraction, vol_i;
         int direction = 0;
         double position_size;
@@ -75,33 +77,27 @@ BacktestResult backtest_run(LSTMNetwork *net,
         lstm_forward(net, test_ds->features[i], cell_states, seq_len, preds);
         p = preds[last_base + sig_k];
 
-        all_preds[i] = p;
-        all_targets[i] = test_ds->labels[i][last_base + sig_k];
-
         /* Map test sample i to raw bar index.
-         * Test sample i → full_ds sample (raw_offset + i).
-         * Full_ds sample j has last feature bar at j + seq_len - 1.
-         * Label predicts: close[j+seq_len] vs close[j+seq_len-1].
-         *
-         * Close-to-close execution: entry at close of last feature bar (t),
-         * exit at close of bar t+hold_bars. This matches the label exactly:
-         * label = (close[t+1] > close[t]) for hold_bars=1, k=0.
-         * The model decides at close[t] (all features known) and enters at
-         * that same close — no look-ahead, no open/close mismatch. */
+         * entry_bar = raw_offset + i + seq_len; last_feat_bar = entry_bar - 1.
+         * Entry at close[last_feat_bar], exit at close[last_feat_bar + hold_bars].
+         * Label at k=hold_bars-1: (close[last_feat_bar + hold_bars] > close[last_feat_bar]).
+         * Close-to-close execution: decision at close[t], enter at close[t] — no look-ahead. */
         entry_bar = raw_offset + i + seq_len;
-        if (entry_bar >= num_raw) continue;
+        if (entry_bar >= num_raw) { n_skip_oob++; continue; }
 
-        int last_feat_bar = entry_bar - 1;
+        last_feat_bar = entry_bar - 1;
         assert(last_feat_bar >= 0 && last_feat_bar < num_raw);
 
         /* Non-overlapping entries: only enter on every hold_bars-th bar.
          * Ensures at most one position is open at any time, so Sharpe/MaxDD
          * are computed on independent trades. */
-        if (config->hold_bars > 1 && (last_feat_bar % config->hold_bars) != 0)
+        if (config->hold_bars > 1 && (last_feat_bar % config->hold_bars) != 0) {
+            n_skip_overlap++;
             continue;
+        }
 
         vol_i = vol_predictions[i];
-        if (vol_i < 1e-9) continue;  /* skip bars with zero/near-zero vol (holiday, flat) */
+        if (vol_i < 1e-9) { n_skip_vol++; continue; }
 
         /* Scale vol for hold horizon: σ_hold = σ_daily × √hold_bars */
         if (config->hold_bars > 1) {
@@ -116,8 +112,10 @@ BacktestResult backtest_run(LSTMNetwork *net,
         /* Vol cost filter: skip trade if expected movement (k·σ̂) doesn't cover costs.
          * threshold_k == 0 disables the filter entirely.
          * Fixed p-threshold at 0.5 — no dynamic offset. */
-        if (config->threshold_k > 0.0 && config->threshold_k * vol_i < cost_fraction)
-            continue;  /* vol too low to cover costs */
+        if (config->threshold_k > 0.0 && config->threshold_k * vol_i < cost_fraction) {
+            n_skip_cost++;
+            continue;
+        }
 
         /* Signal — use configured threshold (default 0.5) */
         if (p >= config->prediction_threshold) {
@@ -128,7 +126,7 @@ BacktestResult backtest_run(LSTMNetwork *net,
 
         /* Exit at close of bar last_feat_bar + hold_bars */
         exit_bar = last_feat_bar + config->hold_bars;
-        if (exit_bar >= num_raw) continue;
+        if (exit_bar >= num_raw) { n_skip_oob++; continue; }
         exit_price = raw[exit_bar].close;
 
         /* Position sizing (vol targeting) */
@@ -149,15 +147,25 @@ BacktestResult backtest_run(LSTMNetwork *net,
             - cost_fraction * position_size;
 
         n_trades++;
+
+        /* Record prediction/target for diagnostic (traded subset only) */
+        all_preds[n_diag] = p;
+        all_targets[n_diag] = test_ds->labels[i][last_base + sig_k];
+        n_diag++;
     }
 
     result.num_trades = n_trades;
+    result.n_test_bars = test_ds->num_samples;
+    result.n_skip_overlap = n_skip_overlap;
+    result.n_skip_vol = n_skip_vol;
+    result.n_skip_cost = n_skip_cost;
+    result.n_skip_oob = n_skip_oob;
 
     /* Diagnostic: print p distribution for this window */
 #ifdef DEBUG_BACKTEST
     {
         double p_min = 1e30, p_max = -1e30, p_sum = 0.0;
-        int n_valid = test_ds->num_samples;
+        int n_valid = n_diag;
         int k;
         for (k = 0; k < n_valid; k++) {
             double pv = all_preds[k];
@@ -191,9 +199,10 @@ BacktestResult backtest_run(LSTMNetwork *net,
     }
 #endif /* DEBUG_BACKTEST */
 
-    /* Compute metrics */
+    /* Compute metrics — annualize by trade frequency, not bar count.
+     * With non-overlapping h-bar holds, max trades/year = 252/h. */
     {
-        double ann_factor = 252.0; /* daily bars per year */
+        double ann_factor = 252.0 / (double)config->hold_bars;
         result.trading = metrics_compute(result.trades, n_trades, ann_factor);
     }
 
@@ -208,7 +217,8 @@ BacktestResult backtest_run(LSTMNetwork *net,
                fabs(result.trading.net_pnl_pct - sum_pnl) < 1e-9 ? "OK" : "MISMATCH");
     }
 #endif /* DEBUG_BACKTEST */
-    result.diagnostic = metrics_diagnostic(all_preds, all_targets, test_ds->num_samples);
+    result.diagnostic = metrics_diagnostic(all_preds, all_targets, n_diag,
+                                            config->prediction_threshold);
 
     free(preds);
     free(all_preds);

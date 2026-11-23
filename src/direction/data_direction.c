@@ -46,6 +46,7 @@ Dataset *data_build_dataset_direction_window(DataRow *raw, int num_raw,
     ds->mode = MODE_DIRECTION;
     ds->raw_data = raw;
     ds->num_raw = num_raw;
+    ds->bar_offset = bar_offset;
 
     ds->features = (double **)utils_safe_malloc((size_t)num_samples * sizeof(double *));
     ds->labels = (double **)utils_safe_malloc((size_t)num_samples * sizeof(double *));

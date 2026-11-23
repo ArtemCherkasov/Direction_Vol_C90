@@ -82,7 +82,8 @@ TradingMetrics metrics_compute(const Trade *trades, int num_trades,
 }
 
 DiagnosticMetrics metrics_diagnostic(const double *predictions,
-                                      const double *targets, int n) {
+                                      const double *targets, int n,
+                                      double threshold) {
     DiagnosticMetrics dm;
     int i, correct = 0;
     double brier_sum = 0.0, logloss_sum = 0.0;
@@ -95,7 +96,7 @@ DiagnosticMetrics metrics_diagnostic(const double *predictions,
     for (i = 0; i < n; i++) {
         double p = predictions[i];
         double t = targets[i];
-        int pred_up = (p > 0.5) ? 1 : 0;
+        int pred_up = (p >= threshold) ? 1 : 0;
         int act_up = (t > 0.5) ? 1 : 0;
         if (pred_up == act_up) correct++;
 
@@ -112,9 +113,14 @@ DiagnosticMetrics metrics_diagnostic(const double *predictions,
 
 void metrics_print_window(int window_num, const char *period_str,
                            const TradingMetrics *tm, const DiagnosticMetrics *dm) {
-    printf("| %2d | %s | PF=%6.2f | Sharpe=%6.2f | MaxDD=%5.1f%% | Trades=%4d | WR=%4.1f%% | P&L=%7.2f%% | Acc=%5.1f%% | Brier=%.4f |\n",
+    char pf_buf[16];
+    if (tm->profit_factor >= 1e6)
+        snprintf(pf_buf, sizeof(pf_buf), "   inf");
+    else
+        snprintf(pf_buf, sizeof(pf_buf), "%6.2f", tm->profit_factor);
+    printf("| %2d | %s | PF=%s | Sharpe=%6.2f | MaxDD=%5.1f%% | Trades=%4d | WR=%4.1f%% | P&L=%7.2f%% | Acc=%5.1f%% | Brier=%.4f |\n",
            window_num, period_str,
-           tm->profit_factor, tm->sharpe_annual, tm->max_drawdown_pct * 100.0,
+           pf_buf, tm->sharpe_annual, tm->max_drawdown_pct * 100.0,
            tm->num_trades, tm->win_rate * 100.0, tm->net_pnl_pct * 100.0,
            dm ? dm->accuracy * 100.0 : 0.0, dm ? dm->brier_score : 0.0);
 }
@@ -137,10 +143,19 @@ void metrics_print_worst(const TradingMetrics *windows, int num_windows) {
     }
 
     printf("\n=== WORST WINDOW (window %d) ===\n", worst_idx + 1);
-    printf("  PF=%.2f  Sharpe=%.2f  MaxDD=%.1f%%  Trades=%d  WR=%.1f%%  P&L=%.2f%%\n",
-           windows[worst_idx].profit_factor, windows[worst_idx].sharpe_annual,
-           windows[worst_idx].max_drawdown_pct * 100.0, windows[worst_idx].num_trades,
-           windows[worst_idx].win_rate * 100.0, windows[worst_idx].net_pnl_pct * 100.0);
+    {
+        double pf = windows[worst_idx].profit_factor;
+        if (pf >= 1e6)
+            printf("  PF=inf  Sharpe=%.2f  MaxDD=%.1f%%  Trades=%d  WR=%.1f%%  P&L=%.2f%%\n",
+                   windows[worst_idx].sharpe_annual,
+                   windows[worst_idx].max_drawdown_pct * 100.0, windows[worst_idx].num_trades,
+                   windows[worst_idx].win_rate * 100.0, windows[worst_idx].net_pnl_pct * 100.0);
+        else
+            printf("  PF=%.2f  Sharpe=%.2f  MaxDD=%.1f%%  Trades=%d  WR=%.1f%%  P&L=%.2f%%\n",
+                   pf, windows[worst_idx].sharpe_annual,
+                   windows[worst_idx].max_drawdown_pct * 100.0, windows[worst_idx].num_trades,
+                   windows[worst_idx].win_rate * 100.0, windows[worst_idx].net_pnl_pct * 100.0);
+    }
 }
 
 int metrics_check_criteria(const TradingMetrics *tm) {

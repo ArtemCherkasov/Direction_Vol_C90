@@ -484,6 +484,7 @@ Dataset *data_alloc_dataset_ext(DataRow *raw, int num_raw, int seq_len,
     ds->mode = mode;
     ds->raw_data = raw;
     ds->num_raw = num_raw;
+    ds->bar_offset = 0;
 
     ds->features = (double **)utils_safe_malloc((size_t)num_samples * sizeof(double *));
     ds->labels = (double **)utils_safe_malloc((size_t)num_samples * sizeof(double *));

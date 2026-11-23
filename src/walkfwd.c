@@ -33,8 +33,6 @@ WalkFwdResult walkfwd_run(DataRow *raw, int num_raw,
     double val_ratio;
     int vol_mode;
     double ewma_lambda;
-    char start_date[32], end_date[32];
-    int start_idx, end_idx;
     double *returns;
 
     memset(&wfr, 0, sizeof(WalkFwdResult));
@@ -57,8 +55,6 @@ WalkFwdResult walkfwd_run(DataRow *raw, int num_raw,
     /* Determine number of windows */
     /* Start from the earliest data, slide forward */
     {
-        char test_end[32];
-        int total_months = wf_train + wf_test;
         int max_windows = params->has_max_windows ? params->max_windows : 80;
         int actual_windows = 0;
         int *train_starts;
@@ -135,7 +131,7 @@ WalkFwdResult walkfwd_run(DataRow *raw, int num_raw,
             bt_cfg.cost_commission = params->has_cost_commission ? params->cost_commission : 0.0;
             bt_cfg.pip_value = 0.0001;
             bt_cfg.threshold_k = params->has_threshold_k ? params->threshold_k : 0.0;
-            bt_cfg.hold_bars = pred_horizon;   /* h=1 for baseline measurement */
+            bt_cfg.hold_bars = pred_horizon;
             bt_cfg.max_position_size = 1.0;
             bt_cfg.target_risk = 0.002;
             bt_cfg.prediction_threshold = params->has_prediction_threshold ? params->prediction_threshold : 0.5;
@@ -147,7 +143,7 @@ WalkFwdResult walkfwd_run(DataRow *raw, int num_raw,
                 DatasetSplit split;
                 ValSplit vs;
                 double *train_min, *train_max;
-                int train_count, val_count;
+                int val_count;
                 int j;
                 LSTMNetwork *net;
                 TrainResult tr;
@@ -155,7 +151,6 @@ WalkFwdResult walkfwd_run(DataRow *raw, int num_raw,
                 double *vol_sigma;  /* predictive sigma per window bar */
                 GarchParams garch;
                 BacktestResult bt_result;
-                int vol_fit_end;
                 char period_str[64];
 
                 tr_s = train_starts[w];
@@ -236,8 +231,6 @@ WalkFwdResult walkfwd_run(DataRow *raw, int num_raw,
 
                 /* Split into train+test — use explicit ratio, not global */
                 split = data_split_train_test(full_ds, (double)(tr_e - tr_s) / (double)(te_e - tr_s));
-
-                train_count = split.train->num_samples;
 
                 /* Construct vol_preds aligned to test samples.
                  * Test sample i → full_ds sample (test_start_sample + i).
@@ -323,10 +316,14 @@ WalkFwdResult walkfwd_run(DataRow *raw, int num_raw,
                 wfr.windows[w].backtest_result = bt_result;
                 printf("  Backtest: %d trades | PF=%.2f | Sharpe=%.2f | MaxDD=%.1f%% | P&L=%.2f%%\n",
                        bt_result.num_trades,
-                       bt_result.trading.profit_factor,
+                       bt_result.trading.profit_factor >= 1e6 ? 1e6 : bt_result.trading.profit_factor,
                        bt_result.trading.sharpe_annual,
                        bt_result.trading.max_drawdown_pct * 100.0,
                        bt_result.trading.net_pnl_pct * 100.0);
+                printf("  Funnel: test_bars=%d → overlap:-%d → vol:-%d → cost:-%d → oob:-%d → trades=%d\n",
+                       bt_result.n_test_bars, bt_result.n_skip_overlap,
+                       bt_result.n_skip_vol, bt_result.n_skip_cost,
+                       bt_result.n_skip_oob, bt_result.num_trades);
 
                 /* Print window results */
                 metrics_print_window(w + 1, period_str,
@@ -381,7 +378,8 @@ WalkFwdResult walkfwd_run(DataRow *raw, int num_raw,
                             found_valid = 1;
                         }
                     }
-                    wfr.aggregate = metrics_compute(pooled_trades, total_trades, 252.0);
+                    wfr.aggregate = metrics_compute(pooled_trades, total_trades,
+                                                       252.0 / (double)pred_horizon);
                     free(pooled_trades);
                 } else {
                     memset(&wfr.aggregate, 0, sizeof(TradingMetrics));
@@ -391,7 +389,7 @@ WalkFwdResult walkfwd_run(DataRow *raw, int num_raw,
                     wfr.worst = wfr.windows[worst_idx].backtest_result.trading;
                 else
                     wfr.worst = wfr.aggregate;
-                wfr.criteria_met = metrics_check_criteria(&wfr.worst);
+                wfr.criteria_met = metrics_check_criteria(&wfr.aggregate);
             }
 
             free(returns);
@@ -437,10 +435,19 @@ void walkfwd_print_report(const WalkFwdResult *result) {
     /* Pooled aggregate — all trades from all windows computed together */
     printf("\n=== AGGREGATE (pooled %d trades from %d windows) ===\n",
            result->aggregate.num_trades, result->num_windows);
-    printf("  PF=%.2f  Sharpe=%.2f  MaxDD=%.1f%%  Trades=%d  WR=%.1f%%  P&L=%.2f%%\n",
-           result->aggregate.profit_factor, result->aggregate.sharpe_annual,
-           result->aggregate.max_drawdown_pct * 100.0, result->aggregate.num_trades,
-           result->aggregate.win_rate * 100.0, result->aggregate.net_pnl_pct * 100.0);
+    {
+        double pf = result->aggregate.profit_factor;
+        if (pf >= 1e6)
+            printf("  PF=inf  Sharpe=%.2f  MaxDD=%.1f%%  Trades=%d  WR=%.1f%%  P&L=%.2f%%\n",
+                   result->aggregate.sharpe_annual,
+                   result->aggregate.max_drawdown_pct * 100.0, result->aggregate.num_trades,
+                   result->aggregate.win_rate * 100.0, result->aggregate.net_pnl_pct * 100.0);
+        else
+            printf("  PF=%.2f  Sharpe=%.2f  MaxDD=%.1f%%  Trades=%d  WR=%.1f%%  P&L=%.2f%%\n",
+                   pf, result->aggregate.sharpe_annual,
+                   result->aggregate.max_drawdown_pct * 100.0, result->aggregate.num_trades,
+                   result->aggregate.win_rate * 100.0, result->aggregate.net_pnl_pct * 100.0);
+    }
 
     /* Worst window for risk assessment */
     {

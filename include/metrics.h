@@ -38,7 +38,8 @@ typedef struct {
 } DiagnosticMetrics;
 
 DiagnosticMetrics metrics_diagnostic(const double *predictions,
-                                      const double *targets, int n);
+                                      const double *targets, int n,
+                                      double threshold);
 
 /* ==================== Report ==================== */
 void metrics_print_window(int window_num, const char *period_str,

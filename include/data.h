@@ -51,6 +51,7 @@ typedef struct {
     /* Raw data for reference */
     DataRow *raw_data;
     int num_raw;
+    int bar_offset;   /* index of first bar in full raw (0 for full-series datasets) */
 } Dataset;
 
 /* ==================== Common Functions ==================== */

@@ -24,6 +24,12 @@ typedef struct {
     int num_trades;
     TradingMetrics trading;
     DiagnosticMetrics diagnostic;
+    /* Filter funnel: how test bars become trades */
+    int n_test_bars;      /* total test samples */
+    int n_skip_overlap;   /* skipped by non-overlap filter */
+    int n_skip_vol;       /* skipped by zero/near-zero vol */
+    int n_skip_cost;      /* skipped by vol cost filter */
+    int n_skip_oob;       /* skipped by exit_bar out of bounds */
 } BacktestResult;
 
 BacktestResult backtest_run(LSTMNetwork *net,

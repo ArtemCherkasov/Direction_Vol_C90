@@ -47,6 +47,11 @@ Requires: CMake 3.22+, GCC with C99 support.
   optimistic: the close cannot be known before it is printed. The label and PnL
   are consistent with each other, but results should be validated with an
   `open[t+1]` execution sensitivity test.
+- **P&L is arithmetic sum**: `net_pnl_pct = Σ pnl_fraction` — no reinvestment.
+  Position size is constant fraction of initial capital (`target_risk / σ`).
+  MaxDD is relative to `1.0 + cumulative_pnl`.
+- **Sharpe annualization**: `√(252 / hold_bars)` — trades per year, not bars per year.
+  With h=3, annualization factor is 84, not 252.
 - **Prediction horizon**: `output = N` sets `num_outputs = N` and `hold_bars = N`.
   Backtest uses output `k = hold_bars - 1` (the N-bar horizon), not `k = 0`.
 - **Non-overlapping entries**: with `hold_bars > 1`, trades enter only on every

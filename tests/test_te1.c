@@ -9,7 +9,7 @@ int test_te1_run(void) {
     double targets[4] = {1.0, 0.0, 1.0, 0.0};
     DiagnosticMetrics dm;
 
-    dm = metrics_diagnostic(preds, targets, 4);
+    dm = metrics_diagnostic(preds, targets, 4, 0.5);
 
     /* Accuracy: all 4 correct (0.8>0.5→1=t, 0.3<0.5→0=t, 0.6>0.5→1=t, 0.1<0.5→0=t) */
     ASSERT_APPROX(dm.accuracy, 1.0, 1e-9);
