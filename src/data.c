@@ -376,6 +376,13 @@ double **data_compute_raw_features(DataRow *raw, int num_raw, int num_features,
          * On bar i, only blocks fully before i are completed.
          * Old formula i/2 peeked into the next MTF bar on even bars. */
         for (i = 0; i < num_raw; i++) {
+            /* MTF alignment: mi = (i-1)/2 gives mi=0 for i=0 and i=1.
+             * At i=1, MTF bar 0 is complete (bars 0-1), so this is causal.
+             * At i=0, MTF bar 0 is not yet complete, but mi=0 is the best
+             * available estimate (no look-ahead to future MTF bars).
+             * This is valid for close-to-close execution where bar i's close
+             * is known before the decision. For open[t+1] execution, this
+             * would need adjustment. */
             int mi = (i - (2 - 1)) / 2;
             if (mi < 0) mi = 0;
             if (mi >= mtf_count) mi = mtf_count - 1;
@@ -460,7 +467,7 @@ Dataset *data_alloc_dataset_ext(DataRow *raw, int num_raw, int seq_len,
     double **raw_features;
     int i, s, fi, ti;
 
-    num_samples = num_raw - seq_len - prediction_horizon;
+    num_samples = num_raw - seq_len - prediction_horizon + 1;
     if (num_samples <= 0) {
         fprintf(stderr, "Error: Not enough data. Need at least %d rows, have %d\n",
                 seq_len + prediction_horizon + 1, num_raw);

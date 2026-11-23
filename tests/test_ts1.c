@@ -22,14 +22,15 @@ int test_ts1_run(void) {
      * Sample 5: s0=(1>4)=0  s1=(5>1)=1
      * Sample 6: s0=(5>1)=1  s1=(3>5)=0
      */
-    double exp_labels[7][2] = {
+    double exp_labels[8][2] = {
         {1.0, 0.0},
         {0.0, 1.0},
         {1.0, 0.0},
         {0.0, 1.0},
         {1.0, 0.0},
         {0.0, 1.0},
-        {1.0, 0.0}
+        {1.0, 0.0},
+        {0.0, 1.0}
     };
 
     for (i = 0; i < 10; i++) {
@@ -45,12 +46,12 @@ int test_ts1_run(void) {
     ds = data_build_dataset_direction(raw, 10, seq, h);
     if (!ds) { fprintf(stderr, "  FAIL: cannot build dataset\n"); return 1; }
 
-    /* num_samples = 10 - 2 - 1 = 7 */
-    ASSERT_INT(ds->num_samples, 7);
+    /* num_samples = 10 - 2 - 1 + 1 = 8 */
+    ASSERT_INT(ds->num_samples, 8);
     ASSERT_INT(ds->sequence_length, seq);
     ASSERT_INT(ds->num_outputs, h);
 
-    for (i = 0; i < 7; i++) {
+    for (i = 0; i < 8; i++) {
         for (s = 0; s < seq; s++) {
             double got = ds->labels[i][s * h];
             double exp = exp_labels[i][s];
@@ -64,6 +65,6 @@ int test_ts1_run(void) {
     }
 
     data_free_dataset(ds);
-    printf("T-S1 PASS: 7 samples x 2 steps, all labels match formula (close[i+s+1] > close[i+s])\n");
+    printf("T-S1 PASS: 8 samples x 2 steps, all labels match formula (close[i+s+1] > close[i+s])\n");
     return 0;
 }

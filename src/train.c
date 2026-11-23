@@ -30,7 +30,11 @@ TrainResult train_run(LSTMNetwork *net,
                        int batch_size, double weight_decay,
                        int max_epochs, int patience,
                        int window_num,
-                       const char *model_path) {
+                       const char *model_path,
+                       const GarchParams *garch,
+                       int h_period,
+                       const char *train_start_date,
+                       const char *train_end_date) {
     TrainResult tr;
     int epoch, i, batch_start;
     int *indices;
@@ -80,7 +84,7 @@ TrainResult train_run(LSTMNetwork *net,
             }
         }
 
-        /* Batch training */
+        /* Batch training — also accumulate train_loss for logging */
         for (batch_start = 0; batch_start < num_train; batch_start += batch_size) {
             int batch_end = batch_start + batch_size;
             int actual_batch = 0;
@@ -91,27 +95,24 @@ TrainResult train_run(LSTMNetwork *net,
 
             for (i = batch_start; i < batch_end; i++) {
                 int idx = indices[i];
+                int t, o;
                 lstm_forward(net, train_ds->features[idx], cell_states, seq_len, preds);
                 lstm_backward(net, train_ds->features[idx], cell_states,
                               preds, train_ds->labels[idx], seq_len);
+                /* Accumulate train loss from this forward pass */
+                for (t = 0; t < seq_len; t++) {
+                    for (o = 0; o < net->num_outputs; o++) {
+                        double p = preds[t * net->num_outputs + o];
+                        double tgt = train_ds->labels[idx][t * net->num_outputs + o];
+                        train_loss += utils_binary_cross_entropy(p, tgt);
+                        train_count++;
+                    }
+                }
             }
 
             lstm_update(net, lr, momentum, actual_batch);
         }
 
-        /* Compute train loss (for logging only) */
-        for (i = 0; i < num_train; i++) {
-            int t, o;
-            lstm_forward(net, train_ds->features[i], cell_states, seq_len, preds);
-            for (t = 0; t < seq_len; t++) {
-                for (o = 0; o < net->num_outputs; o++) {
-                    double p = preds[t * net->num_outputs + o];
-                    double tgt = train_ds->labels[i][t * net->num_outputs + o];
-                    train_loss += utils_binary_cross_entropy(p, tgt);
-                    train_count++;
-                }
-            }
-        }
         train_loss /= (double)train_count;
 
         /* Compute val loss (for model selection) */
@@ -135,8 +136,12 @@ TrainResult train_run(LSTMNetwork *net,
         printf("Window %d | Epoch %d/%d | train_loss=%.6f | val_loss=%.6f | best_val=%.6f\n",
                window_num, epoch + 1, max_epochs, train_loss, val_loss, best_val_loss);
 
-        /* Model selection by val loss */
-        if (val_loss < best_val_loss) {
+        /* Model selection by val loss — guard against NaN/Inf */
+        if (isnan(val_loss) || isinf(val_loss)) {
+            fprintf(stderr, "Window %d | Epoch %d | val_loss is NaN/Inf, skipping model save\n",
+                   window_num, epoch + 1);
+            patience_counter++;
+        } else if (val_loss < best_val_loss) {
             best_val_loss = val_loss;
             tr.best_epoch = epoch + 1;
             tr.train_loss_at_best = train_loss;
@@ -145,7 +150,8 @@ TrainResult train_run(LSTMNetwork *net,
 
             if (model_path) {
                 model_save(model_path, net, (double)(epoch + 1), train_loss,
-                           val_loss, 0.0, train_ds, 1, NULL, NULL, NULL);
+                           val_loss, 0.0, train_ds, h_period, garch,
+                           train_start_date, train_end_date);
             }
         } else {
             patience_counter++;
@@ -166,7 +172,8 @@ TrainResult train_run(LSTMNetwork *net,
             if (model_path) {
                 model_save(model_path, net, (double)tr.best_epoch,
                            tr.train_loss_at_best, best_val_loss, 0.0,
-                           train_ds, 1, NULL, NULL, NULL);
+                           train_ds, h_period, garch,
+                           train_start_date, train_end_date);
                 printf("Window %d | Best model saved to %s\n", window_num, model_path);
             }
             tr.epochs_actual = epoch + 1;

@@ -94,8 +94,17 @@ static double lcg_noise(int i) {
 
 /* Create a network that always outputs sigmoid(output_logit) regardless of input.
  * All gate weights zeroed → hidden state always 0 → output = sigmoid(bias_output). */
+static LSTMNetwork *make_constant_net_ext(int num_features, double output_logit, int num_outputs);
+
 static LSTMNetwork *make_constant_net(int num_features, double output_logit) {
-    LSTMNetwork *net = lstm_init(4, num_features, 1, 42);
+    return make_constant_net_ext(num_features, output_logit, 1);
+}
+
+/* Extended variant: accepts num_outputs parameter for multi-horizon tests.
+ * Sets bias_output_layer[k] = output_logit for k == num_outputs-1 (the horizon
+ * output that backtest uses), and 0 for others. */
+static LSTMNetwork *make_constant_net_ext(int num_features, double output_logit, int num_outputs) {
+    LSTMNetwork *net = lstm_init(4, num_features, num_outputs, 42);
     int i;
     net->output_activation = ACTIVATION_SIGMOID;
     for (i = 0; i < net->weight_forget_recurrent->rows * net->weight_forget_recurrent->cols; i++) {
@@ -118,7 +127,9 @@ static LSTMNetwork *make_constant_net(int num_features, double output_logit) {
         net->bias_output[i] = 0.0;
         net->bias_candidate[i] = 0.0;
     }
-    net->bias_output_layer[0] = output_logit;
+    /* Set the bias on the last output (k = num_outputs-1) — the one backtest uses */
+    for (i = 0; i < num_outputs; i++)
+        net->bias_output_layer[i] = (i == num_outputs - 1) ? output_logit : 0.0;
     return net;
 }
 

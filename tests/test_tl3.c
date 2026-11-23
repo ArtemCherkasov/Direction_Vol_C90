@@ -95,7 +95,7 @@ int test_tl3_run(void) {
 
     tr = train_run(net, vs.train, vs.val,
                    0.01, 0.9, 16, 0.0001,
-                   40, 20, 1, NULL);  /* no model save */
+                   40, 20, 1, NULL, NULL, 1, NULL, NULL);  /* no model save */
 
     val_loss = tr.best_val_loss;
     printf("  best_epoch=%d best_val_loss=%.6f epochs_actual=%d\n",

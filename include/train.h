@@ -24,7 +24,11 @@ TrainResult train_run(LSTMNetwork *net,
                        int batch_size, double weight_decay,
                        int max_epochs, int patience,
                        int window_num,
-                       const char *model_path);
+                       const char *model_path,
+                       const GarchParams *garch,
+                       int h_period,
+                       const char *train_start_date,
+                       const char *train_end_date);
 
 /* ==================== Loss/Accuracy (last timestep only) ==================== */
 

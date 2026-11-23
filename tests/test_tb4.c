@@ -36,6 +36,7 @@ int test_tb4_run(void) {
     cfg.cost_spread = 0.0; cfg.cost_commission = 0.0;  /* zero cost → vol filter always passes */
     cfg.pip_value = 0.0001; cfg.threshold_k = 0.0;     /* threshold_k=0 → 0 < 0 false → never skip */
     cfg.hold_bars = h; cfg.max_position_size = 1.0; cfg.target_risk = 0.02;
+    cfg.prediction_threshold = 0.5;
 
     br = backtest_run(net, ds, raw, num_raw, 0, vol_preds, &cfg);
 

@@ -57,7 +57,7 @@ int test_tl5_run(void) {
 
     tr = train_run(net1, vs.train, vs.val,
                    0.01, 0.9, 16, 0.0001,
-                   60, 5, 1, model_path);
+                   60, 5, 1, model_path, NULL, 1, NULL, NULL);
 
     printf("  best_epoch=%d  epochs_actual=%d  best_val_loss=%.6f\n",
            tr.best_epoch, tr.epochs_actual, tr.best_val_loss);

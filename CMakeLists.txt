@@ -23,8 +23,8 @@ set(SOURCES
 )
 
 add_executable(Direction_Vol_C90 ${SOURCES})
-target_link_libraries(Direction_Vol_C90 m)
-target_compile_options(Direction_Vol_C90 PRIVATE -Wall -Wextra -Wpedantic)
+target_link_libraries(Direction_Vol_C90 $<$<C_COMPILER_ID:GNU,Clang>:m>)
+target_compile_options(Direction_Vol_C90 PRIVATE $<$<C_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic> $<$<C_COMPILER_ID:MSVC>:/W4>)
 
 # Unified test runner — all debug tests in one executable
 set(TEST_ALL_SOURCES
@@ -85,5 +85,5 @@ set(TEST_ALL_SOURCES
 )
 
 add_executable(test_all ${TEST_ALL_SOURCES})
-target_link_libraries(test_all m)
-target_compile_options(test_all PRIVATE -Wall -Wextra -Wpedantic)
+target_link_libraries(test_all $<$<C_COMPILER_ID:GNU,Clang>:m>)
+target_compile_options(test_all PRIVATE $<$<C_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic> $<$<C_COMPILER_ID:MSVC>:/W4>)

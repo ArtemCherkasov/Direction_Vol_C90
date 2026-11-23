@@ -13,7 +13,7 @@
 #define NUM_RAW_FEATURES  (NUM_BASE_FEATURES + NUM_MTF_FEATURES)  /* 26 */
 
 /* ==================== Configurable globals (set from parameters file) ==================== */
-extern double g_train_ratio;        /* default 0.8 */
+extern double g_train_ratio;        /* default 0.8 — currently unused, walkfwd uses date-based split */
 extern double g_volume_return_clip; /* default 10.0 */
 
 /* ==================== Raw Data Row ==================== */

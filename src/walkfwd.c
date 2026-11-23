@@ -138,11 +138,11 @@ WalkFwdResult walkfwd_run(DataRow *raw, int num_raw,
             bt_cfg.hold_bars = pred_horizon;   /* h=1 for baseline measurement */
             bt_cfg.max_position_size = 1.0;
             bt_cfg.target_risk = 0.002;
+            bt_cfg.prediction_threshold = params->has_prediction_threshold ? params->prediction_threshold : 0.5;
 
             for (w = 0; w < num_windows; w++) {
                 int tr_s, tr_e, te_s, te_e;
                 int window_num_rows;
-                DataRow *window_raw;
                 Dataset *full_ds;
                 DatasetSplit split;
                 ValSplit vs;
@@ -176,17 +176,14 @@ WalkFwdResult walkfwd_run(DataRow *raw, int num_raw,
                        raw[tr_s].date, raw[tr_e > 0 ? tr_e - 1 : 0].date, tr_e - tr_s,
                        raw[te_s].date, raw[te_e > 0 ? te_e - 1 : 0].date, te_e - te_s);
 
-                /* Extract window raw data (train + test) */
+                /* Build dataset on FULL raw series (features computed once,
+                 * indicators have proper warm-up from series start, not window start) */
                 window_num_rows = te_e - tr_s;
-                window_raw = (DataRow *)utils_safe_malloc((size_t)window_num_rows * sizeof(DataRow));
-                memcpy(window_raw, raw + tr_s, (size_t)window_num_rows * sizeof(DataRow));
-
-                /* Build dataset (direction mode, 26 features) */
-                full_ds = data_build_dataset_direction(window_raw, window_num_rows,
-                                                        seq_len, pred_horizon);
+                full_ds = data_build_dataset_direction_window(raw, num_raw,
+                                                                seq_len, pred_horizon,
+                                                                tr_s, window_num_rows);
                 if (!full_ds) {
                     fprintf(stderr, "Window %d: failed to build dataset, skipping.\n", w + 1);
-                    free(window_raw);
                     continue;
                 }
 
@@ -272,13 +269,6 @@ WalkFwdResult walkfwd_run(DataRow *raw, int num_raw,
                 /* Compute normalization stats on train ONLY (excluding val) */
                 train_min = (double *)utils_safe_malloc((size_t)full_ds->num_features * sizeof(double));
                 train_max = (double *)utils_safe_malloc((size_t)full_ds->num_features * sizeof(double));
-                {
-                    int j;
-                    for (j = 0; j < full_ds->num_features; j++) {
-                        train_min[j] = vs.train->feat_min[j];
-                        train_max[j] = vs.train->feat_max[j];
-                    }
-                }
                 data_compute_train_stats(vs.train, 0, vs.train->num_samples);
                 for (j = 0; j < full_ds->num_features; j++) {
                     train_min[j] = vs.train->feat_min[j];
@@ -316,17 +306,20 @@ WalkFwdResult walkfwd_run(DataRow *raw, int num_raw,
 
                     tr = train_run(net, vs.train, vs.val,
                                    lr, momentum, batch_size, wd,
-                                   epochs, patience, w + 1, model_path);
+                                   epochs, patience, w + 1, model_path,
+                                   &garch, num_outputs,
+                                   wfr.windows[w].train_start,
+                                   wfr.windows[w].train_end);
                 }
 
                 wfr.windows[w].train_result = tr;
                 printf("  Training done: best_epoch=%d  best_val_loss=%.6f  epochs_actual=%d\n",
                        tr.best_epoch, tr.best_val_loss, tr.epochs_actual);
 
-                /* Backtest on test — pass test_start_sample (train_count + purge) as offset.
-                 * Using train_count alone misses the purge gap and causes look-ahead bias. */
-                bt_result = backtest_run(net, split.test, window_raw, window_num_rows,
-                                         split.test_start_sample, vol_preds, &bt_cfg);
+                /* Backtest on test — pass full raw with offset = tr_s + test_start_sample.
+                 * Dataset sample 0 corresponds to bar tr_s in full raw. */
+                bt_result = backtest_run(net, split.test, raw, num_raw,
+                                         tr_s + split.test_start_sample, vol_preds, &bt_cfg);
                 wfr.windows[w].backtest_result = bt_result;
                 printf("  Backtest: %d trades | PF=%.2f | Sharpe=%.2f | MaxDD=%.1f%% | P&L=%.2f%%\n",
                        bt_result.num_trades,
@@ -348,7 +341,6 @@ WalkFwdResult walkfwd_run(DataRow *raw, int num_raw,
                 data_free_val_split(&vs);
                 data_free_split(&split);
                 data_free_dataset(full_ds);
-                free(window_raw);
 
                 /* Check for Ctrl+C interrupt — stop after completing current window */
                 if (g_interrupted) {
@@ -366,6 +358,8 @@ WalkFwdResult walkfwd_run(DataRow *raw, int num_raw,
                 int worst_idx = 0;
                 double worst_pf = 1e30;
                 int j, pos;
+                int min_trades = 5;
+                int found_valid = 0;
 
                 for (j = 0; j < num_windows; j++)
                     total_trades += wfr.windows[j].backtest_result.num_trades;
@@ -380,9 +374,11 @@ WalkFwdResult walkfwd_run(DataRow *raw, int num_raw,
                                    (size_t)nt * sizeof(Trade));
                             pos += nt;
                         }
-                        if (wfr.windows[j].backtest_result.trading.profit_factor < worst_pf) {
+                        if (nt >= min_trades &&
+                            wfr.windows[j].backtest_result.trading.profit_factor < worst_pf) {
                             worst_pf = wfr.windows[j].backtest_result.trading.profit_factor;
                             worst_idx = j;
+                            found_valid = 1;
                         }
                     }
                     wfr.aggregate = metrics_compute(pooled_trades, total_trades, 252.0);
@@ -391,7 +387,10 @@ WalkFwdResult walkfwd_run(DataRow *raw, int num_raw,
                     memset(&wfr.aggregate, 0, sizeof(TradingMetrics));
                 }
 
-                wfr.worst = wfr.windows[worst_idx].backtest_result.trading;
+                if (found_valid)
+                    wfr.worst = wfr.windows[worst_idx].backtest_result.trading;
+                else
+                    wfr.worst = wfr.aggregate;
                 wfr.criteria_met = metrics_check_criteria(&wfr.worst);
             }
 
@@ -454,5 +453,7 @@ void walkfwd_print_report(const WalkFwdResult *result) {
         free(tm_arr);
     }
 
+    metrics_print_verdict(&result->aggregate);
+    printf("\n=== VERDICT (worst window) ===\n");
     metrics_print_verdict(&result->worst);
 }

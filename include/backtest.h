@@ -15,6 +15,7 @@ typedef struct {
     int hold_bars;           /* h: bars to hold (prediction_horizon) */
     double max_position_size;
     double target_risk;      /* constant expected risk per trade */
+    double prediction_threshold;  /* threshold for long/short decision (default 0.5) */
 } BacktestConfig;
 
 /* ==================== Backtest Result ==================== */

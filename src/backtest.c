@@ -46,6 +46,13 @@ BacktestResult backtest_run(LSTMNetwork *net,
     seq_len = test_ds->sequence_length;
     last_base = (seq_len - 1) * net->num_outputs;
 
+    /* Select the prediction output matching the hold horizon.
+     * Label at output k is (close[t+1+k] > close[t]). For a trade entering at
+     * close[t] and exiting at close[t+hold_bars], the correct output is k = hold_bars-1. */
+    int sig_k = config->hold_bars - 1;
+    if (sig_k < 0) sig_k = 0;
+    if (sig_k >= net->num_outputs) sig_k = net->num_outputs - 1;
+
     cell_states = alloc_cell_states_bt(seq_len, n, net->num_features);
     preds = (double *)utils_safe_calloc((size_t)(net->num_outputs * seq_len), sizeof(double));
 
@@ -66,10 +73,10 @@ BacktestResult backtest_run(LSTMNetwork *net,
 
         /* Forward pass — one signal per bar (last timestep only) */
         lstm_forward(net, test_ds->features[i], cell_states, seq_len, preds);
-        p = preds[last_base];
+        p = preds[last_base + sig_k];
 
         all_preds[i] = p;
-        all_targets[i] = test_ds->labels[i][last_base];
+        all_targets[i] = test_ds->labels[i][last_base + sig_k];
 
         /* Map test sample i to raw bar index.
          * Test sample i → full_ds sample (raw_offset + i).
@@ -86,6 +93,12 @@ BacktestResult backtest_run(LSTMNetwork *net,
 
         int last_feat_bar = entry_bar - 1;
         assert(last_feat_bar >= 0 && last_feat_bar < num_raw);
+
+        /* Non-overlapping entries: only enter on every hold_bars-th bar.
+         * Ensures at most one position is open at any time, so Sharpe/MaxDD
+         * are computed on independent trades. */
+        if (config->hold_bars > 1 && (last_feat_bar % config->hold_bars) != 0)
+            continue;
 
         vol_i = vol_predictions[i];
         if (vol_i < 1e-9) continue;  /* skip bars with zero/near-zero vol (holiday, flat) */
@@ -106,8 +119,8 @@ BacktestResult backtest_run(LSTMNetwork *net,
         if (config->threshold_k > 0.0 && config->threshold_k * vol_i < cost_fraction)
             continue;  /* vol too low to cover costs */
 
-        /* Signal — fixed threshold at 0.5 */
-        if (p >= 0.5) {
+        /* Signal — use configured threshold (default 0.5) */
+        if (p >= config->prediction_threshold) {
             direction = 1;  /* long */
         } else {
             direction = -1; /* short */
@@ -125,7 +138,7 @@ BacktestResult backtest_run(LSTMNetwork *net,
 
         /* Record trade */
         result.trades[n_trades].bar_index = i;
-        result.trades[n_trades].entry_bar = entry_bar;
+        result.trades[n_trades].entry_bar = last_feat_bar;
         result.trades[n_trades].exit_bar = exit_bar;
         result.trades[n_trades].direction = direction;
         result.trades[n_trades].entry_price = entry_price;
@@ -141,6 +154,7 @@ BacktestResult backtest_run(LSTMNetwork *net,
     result.num_trades = n_trades;
 
     /* Diagnostic: print p distribution for this window */
+#ifdef DEBUG_BACKTEST
     {
         double p_min = 1e30, p_max = -1e30, p_sum = 0.0;
         int n_valid = test_ds->num_samples;
@@ -175,6 +189,7 @@ BacktestResult backtest_run(LSTMNetwork *net,
             free(sorted);
         }
     }
+#endif /* DEBUG_BACKTEST */
 
     /* Compute metrics */
     {
@@ -182,6 +197,7 @@ BacktestResult backtest_run(LSTMNetwork *net,
         result.trading = metrics_compute(result.trades, n_trades, ann_factor);
     }
 
+#ifdef DEBUG_BACKTEST
     /* CHECK-print: verify window P&L equals sum of pnl_fraction */
     {
         double sum_pnl = 0.0;
@@ -191,6 +207,7 @@ BacktestResult backtest_run(LSTMNetwork *net,
                result.trading.net_pnl_pct, sum_pnl,
                fabs(result.trading.net_pnl_pct - sum_pnl) < 1e-9 ? "OK" : "MISMATCH");
     }
+#endif /* DEBUG_BACKTEST */
     result.diagnostic = metrics_diagnostic(all_preds, all_targets, test_ds->num_samples);
 
     free(preds);

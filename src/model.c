@@ -173,6 +173,8 @@ int model_load(const char *filepath, LSTMNetwork *net) {
     int rows_loaded = 0;
     int lines_processed = 0;
     int gate_set_count = 0;
+    int out_rows_loaded = 0;
+    int out_bias_loaded = 0;
 
     n = net->num_cells;
     f_ = net->num_features;
@@ -393,6 +395,7 @@ int model_load(const char *filepath, LSTMNetwork *net) {
                             val = strtod(p, &p);
                             net->weight_output_layer->data[parsed_row * n + i] = val;
                         }
+                        out_rows_loaded++;
                     }
                 }
                 continue;
@@ -403,6 +406,7 @@ int model_load(const char *filepath, LSTMNetwork *net) {
                 for (i = 0; i < num_out && *p; i++) {
                     net->bias_output_layer[i] = strtod(p, &p);
                 }
+                out_bias_loaded = 1;
                 continue;
             }
         }
@@ -414,9 +418,11 @@ int model_load(const char *filepath, LSTMNetwork *net) {
     {
         int expected_gate_sets = 12;  /* 4 gates × 3 types (recurrent, input, bias) */
         int expected_rows = 8 * n;    /* 4 gates × 2 matrix types × n rows per matrix */
-        if (gate_set_count != expected_gate_sets || rows_loaded != expected_rows) {
-            fprintf(stderr, "Error: model file truncated — gate_sets=%d/%d rows=%d/%d\n",
-                    gate_set_count, expected_gate_sets, rows_loaded, expected_rows);
+        if (gate_set_count != expected_gate_sets || rows_loaded != expected_rows ||
+            out_rows_loaded != num_out || out_bias_loaded != 1) {
+            fprintf(stderr, "Error: model file truncated — gate_sets=%d/%d rows=%d/%d out_rows=%d/%d out_bias=%d/1\n",
+                    gate_set_count, expected_gate_sets, rows_loaded, expected_rows,
+                    out_rows_loaded, num_out, out_bias_loaded);
             return -1;
         }
     }

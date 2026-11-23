@@ -43,7 +43,6 @@ DiagnosticMetrics metrics_diagnostic(const double *predictions,
 /* ==================== Report ==================== */
 void metrics_print_window(int window_num, const char *period_str,
                            const TradingMetrics *tm, const DiagnosticMetrics *dm);
-void metrics_print_aggregate(const TradingMetrics *windows, int num_windows);
 void metrics_print_worst(const TradingMetrics *windows, int num_windows);
 int metrics_check_criteria(const TradingMetrics *tm);
 void metrics_print_verdict(const TradingMetrics *tm);

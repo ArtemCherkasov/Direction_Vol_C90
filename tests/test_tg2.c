@@ -45,6 +45,7 @@ int test_tg2_run(void) {
     cfg.cost_spread = 0.0; cfg.cost_commission = 0.0;
     cfg.pip_value = 0.0001; cfg.threshold_k = 0.0;
     cfg.hold_bars = h; cfg.max_position_size = 1.0; cfg.target_risk = 0.02;
+    cfg.prediction_threshold = 0.5;
 
     br = backtest_run(net, split.test, raw, num_raw,
                       split.test_start_sample, vol_preds, &cfg);

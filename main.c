@@ -16,6 +16,11 @@
 #include <string.h>
 #include <signal.h>
 #include <math.h>
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
 
 /* ==================== Globals ==================== */
 
@@ -23,11 +28,21 @@ static void signal_handler(int sig) {
     (void)sig;
     if (g_interrupted) {
         /* Second Ctrl+C — force exit */
-        fprintf(stderr, "\nForce exit.\n");
-        exit(1);
+        const char msg1[] = "\nForce exit.\n";
+#ifdef _WIN32
+        _write(2, msg1, sizeof(msg1) - 1);
+#else
+        write(STDERR_FILENO, msg1, sizeof(msg1) - 1);
+#endif
+        _exit(1);
     }
     g_interrupted = 1;
-    fprintf(stderr, "\n[Ctrl+C] Finishing current epoch and saving best model... (press again to force exit)\n");
+    const char msg2[] = "\n[Ctrl+C] Finishing current epoch and saving best model... (press again to force exit)\n";
+#ifdef _WIN32
+    _write(2, msg2, sizeof(msg2) - 1);
+#else
+    write(STDERR_FILENO, msg2, sizeof(msg2) - 1);
+#endif
 }
 
 /* ==================== Usage ==================== */
@@ -188,10 +203,14 @@ static int run_predict(ParamsFile *pf) {
             returns[i] = 0.0;
     }
 
-    if (vol_mode == VOL_MODE_GARCH) {
+    /* Try loading GARCH params from model file first; fall back to fitting */
+    if (model_load_garch(pf->model, &garch) == 0) {
+        sigma2 = vol_garch_series(returns, n_returns, &garch);
+        printf("GARCH (from model): omega=%.6e alpha=%.4f beta=%.4f\n", garch.omega, garch.alpha, garch.beta);
+    } else if (vol_mode == VOL_MODE_GARCH) {
         garch = vol_garch_fit(returns, n_returns, 300);
         sigma2 = vol_garch_series(returns, n_returns, &garch);
-        printf("GARCH: omega=%.6e alpha=%.4f beta=%.4f\n", garch.omega, garch.alpha, garch.beta);
+        printf("GARCH (re-fitted): omega=%.6e alpha=%.4f beta=%.4f\n", garch.omega, garch.alpha, garch.beta);
     } else {
         sigma2 = vol_ewma(returns, n_returns, ewma_lambda);
         printf("EWMA: lambda=%.4f\n", ewma_lambda);

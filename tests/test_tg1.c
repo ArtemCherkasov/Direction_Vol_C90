@@ -99,7 +99,7 @@ int test_tg1_run(void) {
     net = lstm_init(4, ds->num_features, h, 42);
     net->output_activation = ACTIVATION_SIGMOID;
 
-    tr = train_run(net, vs.train, vs.val, 0.005, 0.9, 16, 0.0001, 10, 5, 1, NULL);
+    tr = train_run(net, vs.train, vs.val, 0.005, 0.9, 16, 0.0001, 10, 5, 1, NULL, NULL, 1, NULL, NULL);
 
     vol_preds = (double *)malloc(split.test->num_samples * sizeof(double));
     for (i = 0; i < split.test->num_samples; i++) vol_preds[i] = 0.01;
@@ -108,6 +108,7 @@ int test_tg1_run(void) {
     cfg.cost_spread = 0.0001; cfg.cost_commission = 0.0;
     cfg.pip_value = 0.0001; cfg.threshold_k = 0.0;
     cfg.hold_bars = h; cfg.max_position_size = 1.0; cfg.target_risk = 0.002;
+    cfg.prediction_threshold = 0.5;
 
     br = backtest_run(net, split.test, raw, num_raw,
                       split.test_start_sample, vol_preds, &cfg);

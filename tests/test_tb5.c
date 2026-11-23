@@ -37,18 +37,19 @@ int test_tb5_run(void) {
     cfg.cost_spread = 0.0; cfg.cost_commission = 0.0;
     cfg.pip_value = 0.0001; cfg.threshold_k = 0.0;
     cfg.hold_bars = h; cfg.max_position_size = 1.0; cfg.target_risk = 0.02;
+    cfg.prediction_threshold = 0.5;
 
     br = backtest_run(net, ds, raw, num_raw, raw_offset, vol_preds, &cfg);
 
     printf("  trades=%d\n", br.num_trades);
 
     for (i = 0; i < br.num_trades; i++) {
-        int exp_entry_bar = raw_offset + i + seq;
-        int exp_exit_bar  = exp_entry_bar - 1 + cfg.hold_bars;
+        int exp_entry_bar = raw_offset + i + seq - 1;  /* last_feat_bar (entry price bar) */
+        int exp_exit_bar  = exp_entry_bar + cfg.hold_bars;
 
         ASSERT_INT(br.trades[i].entry_bar, exp_entry_bar);
         ASSERT_INT(br.trades[i].exit_bar, exp_exit_bar);
-        ASSERT_APPROX(br.trades[i].entry_price, raw[exp_entry_bar - 1].close, 1e-15);
+        ASSERT_APPROX(br.trades[i].entry_price, raw[exp_entry_bar].close, 1e-15);
         ASSERT_APPROX(br.trades[i].exit_price,  raw[exp_exit_bar].close,  1e-15);
     }
 

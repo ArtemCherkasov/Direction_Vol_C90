@@ -26,7 +26,12 @@ typedef struct {
     double forget_gate_bias_init; /* forget gate bias init value (default 1.0) */
 
     /* Weight matrices for each gate: [num_cells x num_cells] (recurrent)
-     *                      and [num_cells x num_features] (input) */
+     *                      and [num_cells x num_features] (input)
+     * Note: weight_*_input matrices are allocated, saved, and loaded for model
+     * file compatibility, but are NOT used in forward/backward computation.
+     * The recurrent matrices already contain both hidden and input weights in
+     * their combined [n+f] column layout. These are legacy and may be removed
+     * in a future model-format version bump. */
     Matrix *weight_forget_recurrent, *weight_forget_input;
     double *bias_forget;
 

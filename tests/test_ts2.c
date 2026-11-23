@@ -26,8 +26,8 @@ int test_ts2_run(void) {
     ds = data_build_dataset_direction(raw, num_raw, seq, h);
     if (!ds) { fprintf(stderr, "  FAIL: cannot build dataset\n"); return 1; }
 
-    /* num_samples = 20 - 5 - 2 = 13 */
-    ASSERT_INT(ds->num_samples, 13);
+    /* num_samples = 20 - 5 - 2 + 1 = 14 */
+    ASSERT_INT(ds->num_samples, 14);
 
     /* Access all labels — compute max raw index used */
     for (i = 0; i < ds->num_samples; i++) {
@@ -41,11 +41,11 @@ int test_ts2_run(void) {
         }
     }
 
-    /* Max index = num_samples-1 + seq-1 + 1 + h-1 = 12 + 4 + 1 + 1 = 18 */
-    ASSERT_INT(max_idx_accessed, 18);
+    /* Max index = num_samples-1 + seq-1 + 1 + h-1 = 13 + 4 + 1 + 1 = 19 */
+    ASSERT_INT(max_idx_accessed, 19);
     ASSERT_TRUE(max_idx_accessed < num_raw);  /* no out-of-bounds */
 
     data_free_dataset(ds);
-    printf("T-S2 PASS: num_samples=13, max raw idx=%d < num_raw=%d\n", max_idx_accessed, num_raw);
+    printf("T-S2 PASS: num_samples=14, max raw idx=%d < num_raw=%d\n", max_idx_accessed, num_raw);
     return 0;
 }

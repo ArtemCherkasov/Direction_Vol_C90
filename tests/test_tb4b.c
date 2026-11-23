@@ -41,6 +41,7 @@ int test_tb4b_run(void) {
     cfg.cost_spread = 0.00014; cfg.cost_commission = 0.0;
     cfg.pip_value = 0.0001; cfg.threshold_k = 100.0;  /* 100 * 0.001 = 0.1 >> 0.00014 */
     cfg.hold_bars = h; cfg.max_position_size = 1.0; cfg.target_risk = 0.02;
+    cfg.prediction_threshold = 0.5;
 
     br = backtest_run(net, ds, raw, num_raw, 0, vol_preds, &cfg);
     printf("  Case 1 (k=100, vol=0.001): k*sigma=%.4f >> cost=%.6f → trades=%d\n",

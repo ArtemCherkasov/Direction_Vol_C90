@@ -119,36 +119,21 @@ void metrics_print_window(int window_num, const char *period_str,
            dm ? dm->accuracy * 100.0 : 0.0, dm ? dm->brier_score : 0.0);
 }
 
-void metrics_print_aggregate(const TradingMetrics *windows, int num_windows) {
-    double sum_pf = 0.0, sum_sharpe = 0.0, sum_dd = 0.0;
-    double sum_pnl = 0.0, sum_wr = 0.0;
-    int total_trades = 0, i;
+void metrics_print_worst(const TradingMetrics *windows, int num_windows) {
+    int worst_idx = -1, i;
+    double worst_pf = 1e30;
+    int min_trades = 5;
 
     for (i = 0; i < num_windows; i++) {
-        sum_pf += windows[i].profit_factor;
-        sum_sharpe += windows[i].sharpe_annual;
-        sum_dd += windows[i].max_drawdown_pct;
-        sum_pnl += windows[i].net_pnl_pct;
-        sum_wr += windows[i].win_rate;
-        total_trades += windows[i].num_trades;
-    }
-
-    printf("\n=== AGGREGATE (mean across %d windows) ===\n", num_windows);
-    printf("  PF=%.2f  Sharpe=%.2f  MaxDD=%.1f%%  Trades=%d  WR=%.1f%%  P&L=%.2f%%\n",
-           sum_pf / num_windows, sum_sharpe / num_windows,
-           sum_dd / num_windows * 100.0, total_trades,
-           sum_wr / num_windows * 100.0, sum_pnl / num_windows * 100.0);
-}
-
-void metrics_print_worst(const TradingMetrics *windows, int num_windows) {
-    int worst_idx = 0, i;
-    double worst_pf = windows[0].profit_factor;
-
-    for (i = 1; i < num_windows; i++) {
-        if (windows[i].profit_factor < worst_pf) {
+        if (windows[i].num_trades >= min_trades && windows[i].profit_factor < worst_pf) {
             worst_pf = windows[i].profit_factor;
             worst_idx = i;
         }
+    }
+
+    if (worst_idx < 0) {
+        printf("\n=== WORST WINDOW ===\n  Insufficient trades (< %d) in all windows for verdict\n", min_trades);
+        return;
     }
 
     printf("\n=== WORST WINDOW (window %d) ===\n", worst_idx + 1);
