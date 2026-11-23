@@ -73,6 +73,7 @@ void parse_parameters_file(const char *path, ParamsFile *pf) {
         else if (strcmp(key, "cost_commission") == 0) { pf->cost_commission = atof(val); pf->has_cost_commission = 1; }
         else if (strcmp(key, "threshold_k") == 0) { pf->threshold_k = atof(val); pf->has_threshold_k = 1; }
         else if (strcmp(key, "val_ratio") == 0) { pf->val_ratio = atof(val); pf->has_val_ratio = 1; }
+        else if (strcmp(key, "max_windows") == 0) { pf->max_windows = atoi(val); pf->has_max_windows = 1; }
     }
     fclose(f);
 }

@@ -47,6 +47,9 @@ typedef struct {
 
     /* --- NEW: Validation split --- */
     double val_ratio; int has_val_ratio;
+
+    /* --- NEW: Walk-forward limits --- */
+    int max_windows; int has_max_windows;
 } ParamsFile;
 
 void parse_parameters_file(const char *path, ParamsFile *pf);

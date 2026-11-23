@@ -409,7 +409,18 @@ int model_load(const char *filepath, LSTMNetwork *net) {
     }
 
     fclose(f);
-    
+
+    /* Completeness check: verify all gate sections and rows were loaded */
+    {
+        int expected_gate_sets = 12;  /* 4 gates × 3 types (recurrent, input, bias) */
+        int expected_rows = 8 * n;    /* 4 gates × 2 matrix types × n rows per matrix */
+        if (gate_set_count != expected_gate_sets || rows_loaded != expected_rows) {
+            fprintf(stderr, "Error: model file truncated — gate_sets=%d/%d rows=%d/%d\n",
+                    gate_set_count, expected_gate_sets, rows_loaded, expected_rows);
+            return -1;
+        }
+    }
+
     return 0;
 }
 

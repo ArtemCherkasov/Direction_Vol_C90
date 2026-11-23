@@ -240,9 +240,14 @@ GarchParams vol_garch_fit(const double *returns, int n_returns, int max_iter) {
     if (opt_params[1] < 0.0) opt_params[1] = 0.0;
     if (opt_params[2] < 0.0) opt_params[2] = 0.0;
     if (opt_params[1] + opt_params[2] >= 0.999) {
+        /* Scale α,β to satisfy stationarity AND adjust ω to preserve
+         * unconditional variance ω/(1-α-β). Without ω adjustment, the
+         * post-hoc scaling moves away from the likelihood optimum. */
+        double old_uncond_var = opt_params[0] / (1.0 - opt_params[1] - opt_params[2]);
         double scale = 0.999 / (opt_params[1] + opt_params[2]);
         opt_params[1] *= scale;
         opt_params[2] *= scale;
+        opt_params[0] = old_uncond_var * (1.0 - opt_params[1] - opt_params[2]);
     }
 
     gp.omega = opt_params[0];
@@ -308,9 +313,9 @@ double *vol_predict(const double *returns, int n_returns,
         for (i = 0; i < result_len; i++) {
             int idx = predict_start + i;
             if (idx >= 0 && idx < n_returns) {
-                result[i] = sqrt(fabs(sigma2[idx]));
+                result[i] = (sigma2[idx] > 1e-12) ? sqrt(sigma2[idx]) : 1e-6;
             } else {
-                result[i] = sqrt(fabs(gp.sigma2_init));
+                result[i] = (gp.sigma2_init > 1e-12) ? sqrt(gp.sigma2_init) : 1e-6;
             }
         }
         free(sigma2);
@@ -322,9 +327,9 @@ double *vol_predict(const double *returns, int n_returns,
         for (i = 0; i < result_len; i++) {
             int idx = predict_start + i;
             if (idx >= 0 && idx < n_returns) {
-                result[i] = sqrt(fabs(sigma2[idx]));
+                result[i] = (sigma2[idx] > 1e-12) ? sqrt(sigma2[idx]) : 1e-6;
             } else {
-                result[i] = sqrt(fabs(sigma2[n_returns - 1]));
+                result[i] = (sigma2[n_returns - 1] > 1e-12) ? sqrt(sigma2[n_returns - 1]) : 1e-6;
             }
         }
         free(sigma2);

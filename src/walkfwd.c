@@ -59,7 +59,7 @@ WalkFwdResult walkfwd_run(DataRow *raw, int num_raw,
     {
         char test_end[32];
         int total_months = wf_train + wf_test;
-        int max_windows = 20;
+        int max_windows = params->has_max_windows ? params->max_windows : 80;
         int actual_windows = 0;
         int *train_starts;
         int *train_ends;
@@ -216,9 +216,9 @@ WalkFwdResult walkfwd_run(DataRow *raw, int num_raw,
                     vol_sigma = (double *)utils_safe_malloc((size_t)window_num_rows * sizeof(double));
                     for (bi = 0; bi < window_num_rows; bi++) {
                         if (bi < window_ret_len)
-                            vol_sigma[bi] = sqrt(fabs(sigma2[bi]));
+                            vol_sigma[bi] = (sigma2[bi] > 1e-12) ? sqrt(sigma2[bi]) : 1e-6;
                         else
-                            vol_sigma[bi] = sqrt(fabs(sigma2[window_ret_len - 1]));
+                            vol_sigma[bi] = (sigma2[window_ret_len - 1] > 1e-12) ? sqrt(sigma2[window_ret_len - 1]) : 1e-6;
                     }
 
                     /* Append vol as feature 27 to the dataset (all samples/timesteps) */
@@ -359,41 +359,40 @@ WalkFwdResult walkfwd_run(DataRow *raw, int num_raw,
                 }
             }
 
-            /* Aggregate metrics */
+            /* Aggregate metrics — pool all trades from all windows */
             {
-                TradingMetrics *tm_arr;
-                int j;
-                double sum_pf = 0, sum_sharpe = 0, sum_dd = 0, sum_pnl = 0, sum_wr = 0;
+                Trade *pooled_trades;
                 int total_trades = 0;
                 int worst_idx = 0;
                 double worst_pf = 1e30;
+                int j, pos;
 
-                tm_arr = (TradingMetrics *)utils_safe_malloc((size_t)num_windows * sizeof(TradingMetrics));
-                for (j = 0; j < num_windows; j++) {
-                    tm_arr[j] = wfr.windows[j].backtest_result.trading;
-                    sum_pf += tm_arr[j].profit_factor;
-                    sum_sharpe += tm_arr[j].sharpe_annual;
-                    sum_dd += tm_arr[j].max_drawdown_pct;
-                    sum_pnl += tm_arr[j].net_pnl_pct;
-                    sum_wr += tm_arr[j].win_rate;
-                    total_trades += tm_arr[j].num_trades;
-                    if (tm_arr[j].profit_factor < worst_pf) {
-                        worst_pf = tm_arr[j].profit_factor;
-                        worst_idx = j;
+                for (j = 0; j < num_windows; j++)
+                    total_trades += wfr.windows[j].backtest_result.num_trades;
+
+                if (total_trades > 0) {
+                    pooled_trades = (Trade *)utils_safe_malloc((size_t)total_trades * sizeof(Trade));
+                    pos = 0;
+                    for (j = 0; j < num_windows; j++) {
+                        int nt = wfr.windows[j].backtest_result.num_trades;
+                        if (nt > 0) {
+                            memcpy(pooled_trades + pos, wfr.windows[j].backtest_result.trades,
+                                   (size_t)nt * sizeof(Trade));
+                            pos += nt;
+                        }
+                        if (wfr.windows[j].backtest_result.trading.profit_factor < worst_pf) {
+                            worst_pf = wfr.windows[j].backtest_result.trading.profit_factor;
+                            worst_idx = j;
+                        }
                     }
+                    wfr.aggregate = metrics_compute(pooled_trades, total_trades, 252.0);
+                    free(pooled_trades);
+                } else {
+                    memset(&wfr.aggregate, 0, sizeof(TradingMetrics));
                 }
 
-                wfr.aggregate.profit_factor = sum_pf / num_windows;
-                wfr.aggregate.sharpe_annual = sum_sharpe / num_windows;
-                wfr.aggregate.max_drawdown_pct = sum_dd / num_windows;
-                wfr.aggregate.net_pnl_pct = sum_pnl / num_windows;
-                wfr.aggregate.win_rate = sum_wr / num_windows;
-                wfr.aggregate.num_trades = total_trades;
-
-                wfr.worst = tm_arr[worst_idx];
+                wfr.worst = wfr.windows[worst_idx].backtest_result.trading;
                 wfr.criteria_met = metrics_check_criteria(&wfr.worst);
-
-                free(tm_arr);
             }
 
             free(returns);
@@ -420,6 +419,11 @@ void walkfwd_free(WalkFwdResult *result) {
 void walkfwd_print_report(const WalkFwdResult *result) {
     int i;
 
+    if (result->num_windows == 0) {
+        printf("\n=== WALK-FORWARD REPORT ===\n\nNo windows completed.\n");
+        return;
+    }
+
     printf("\n=== WALK-FORWARD REPORT ===\n\n");
     printf("Window results:\n");
     for (i = 0; i < result->num_windows; i++) {
@@ -431,13 +435,21 @@ void walkfwd_print_report(const WalkFwdResult *result) {
                              &result->windows[i].backtest_result.diagnostic);
     }
 
+    /* Pooled aggregate — all trades from all windows computed together */
+    printf("\n=== AGGREGATE (pooled %d trades from %d windows) ===\n",
+           result->aggregate.num_trades, result->num_windows);
+    printf("  PF=%.2f  Sharpe=%.2f  MaxDD=%.1f%%  Trades=%d  WR=%.1f%%  P&L=%.2f%%\n",
+           result->aggregate.profit_factor, result->aggregate.sharpe_annual,
+           result->aggregate.max_drawdown_pct * 100.0, result->aggregate.num_trades,
+           result->aggregate.win_rate * 100.0, result->aggregate.net_pnl_pct * 100.0);
+
+    /* Worst window for risk assessment */
     {
         TradingMetrics *tm_arr;
         tm_arr = (TradingMetrics *)utils_safe_malloc((size_t)result->num_windows * sizeof(TradingMetrics));
         for (i = 0; i < result->num_windows; i++) {
             tm_arr[i] = result->windows[i].backtest_result.trading;
         }
-        metrics_print_aggregate(tm_arr, result->num_windows);
         metrics_print_worst(tm_arr, result->num_windows);
         free(tm_arr);
     }

@@ -143,10 +143,14 @@ static int run_train(ParamsFile *pf) {
 static int run_predict(ParamsFile *pf) {
     DataRow *raw = NULL;
     int num_raw = 0;
-    int seq_len, num_cells, num_outputs, h_period;
+    int seq_len, num_cells, num_outputs;
     LSTMNetwork *net;
     Dataset *ds;
-    double *preds;
+    double *returns, *sigma2, *vol_sigma;
+    GarchParams garch;
+    int vol_mode;
+    double ewma_lambda;
+    int i, n_returns;
 
     if (!pf->has_model || pf->model[0] == 0) {
         fprintf(stderr, "Error: --model <file> required for predict mode.\n");
@@ -156,6 +160,9 @@ static int run_predict(ParamsFile *pf) {
     seq_len = pf->has_seq ? pf->seq : 10;
     num_cells = pf->has_cells ? pf->cells : 63;
     num_outputs = pf->has_output ? pf->output : 1;
+    ewma_lambda = pf->has_ewma_lambda ? pf->ewma_lambda : 0.94;
+    if (strcmp(pf->vol_mode, "ewma") == 0) vol_mode = VOL_MODE_EWMA;
+    else vol_mode = VOL_MODE_GARCH;
 
     printf("Loading data: %s\n", pf->data);
     if (data_load_raw(pf->data, &raw, &num_raw) != 0) {
@@ -163,6 +170,7 @@ static int run_predict(ParamsFile *pf) {
         return -1;
     }
 
+    /* Build dataset (26 raw features) */
     ds = data_build_dataset_direction(raw, num_raw, seq_len, num_outputs);
     if (!ds) {
         fprintf(stderr, "Failed to build dataset.\n");
@@ -170,8 +178,55 @@ static int run_predict(ParamsFile *pf) {
         return -1;
     }
 
-    data_normalize_features(ds);
+    /* Compute log returns and vol feature — same as walkfwd */
+    n_returns = num_raw - 1;
+    returns = (double *)utils_safe_malloc((size_t)n_returns * sizeof(double));
+    for (i = 0; i < n_returns; i++) {
+        if (raw[i].close > 0.0 && raw[i + 1].close > 0.0)
+            returns[i] = log(raw[i + 1].close / raw[i].close);
+        else
+            returns[i] = 0.0;
+    }
 
+    if (vol_mode == VOL_MODE_GARCH) {
+        garch = vol_garch_fit(returns, n_returns, 300);
+        sigma2 = vol_garch_series(returns, n_returns, &garch);
+        printf("GARCH: omega=%.6e alpha=%.4f beta=%.4f\n", garch.omega, garch.alpha, garch.beta);
+    } else {
+        sigma2 = vol_ewma(returns, n_returns, ewma_lambda);
+        printf("EWMA: lambda=%.4f\n", ewma_lambda);
+    }
+
+    vol_sigma = (double *)utils_safe_malloc((size_t)num_raw * sizeof(double));
+    for (i = 0; i < num_raw; i++) {
+        if (i < n_returns)
+            vol_sigma[i] = (sigma2[i] > 1e-12) ? sqrt(sigma2[i]) : 1e-6;
+        else
+            vol_sigma[i] = (sigma2[n_returns - 1] > 1e-12) ? sqrt(sigma2[n_returns - 1]) : 1e-6;
+    }
+
+    /* Append vol as feature 27 — must match training pipeline */
+    data_append_vol_feature(ds, vol_sigma, num_raw, "pred_vol");
+    printf("Vol feature appended: %d features\n", ds->num_features);
+
+    free(returns);
+    free(sigma2);
+    free(vol_sigma);
+
+    /* Load normalization from model file (train stats), not from whole dataset */
+    if (model_load_normalization(pf->model, ds->feat_min, ds->feat_max,
+                                  ds->num_features,
+                                  ds->label_min, ds->label_max,
+                                  ds->num_outputs) != 0) {
+        fprintf(stderr, "Warning: failed to load normalization from model, "
+                "falling back to dataset stats\n");
+        data_normalize_features(ds);
+    } else {
+        data_normalize_with_stats(ds, ds->feat_min, ds->feat_max);
+        printf("Normalization loaded from model file\n");
+    }
+
+    /* Load model — dimensions now match (27 features) */
     net = lstm_init(num_cells, ds->num_features, num_outputs, 42);
     net->output_activation = ACTIVATION_SIGMOID;
 
@@ -188,7 +243,6 @@ static int run_predict(ParamsFile *pf) {
     demo_direction(net, ds, num_outputs);
 
     /* Cleanup */
-    preds = NULL;
     data_free_dataset(ds);
     lstm_free(net);
     free(raw);
@@ -247,6 +301,7 @@ int main(int argc, char **argv) {
         if (!pf.has_cost_commission && file_params.has_cost_commission) { pf.cost_commission = file_params.cost_commission; pf.has_cost_commission = 1; }
         if (!pf.has_threshold_k && file_params.has_threshold_k) { pf.threshold_k = file_params.threshold_k; pf.has_threshold_k = 1; }
         if (!pf.has_val_ratio && file_params.has_val_ratio) { pf.val_ratio = file_params.val_ratio; pf.has_val_ratio = 1; }
+        if (!pf.has_max_windows && file_params.has_max_windows) { pf.max_windows = file_params.max_windows; pf.has_max_windows = 1; }
     }
 
     /* Apply defaults */

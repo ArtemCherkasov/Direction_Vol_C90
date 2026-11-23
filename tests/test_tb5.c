@@ -1,8 +1,9 @@
 /*
- * T-B5: Entry/exit alignment.
- * Assert: entry_price == raw[entry_bar].open,
- *         exit_price == raw[entry_bar + hold_bars].open,
- *         entry_bar == raw_offset + i + seq_len.
+ * T-B5: Entry/exit alignment (close-to-close execution).
+ * Assert: entry_price == raw[entry_bar - 1].close (last feature bar close),
+ *         exit_price == raw[exit_bar].close,
+ *         entry_bar == raw_offset + i + seq_len,
+ *         exit_bar  == entry_bar - 1 + hold_bars.
  */
 #include "test_common.h"
 
@@ -43,18 +44,18 @@ int test_tb5_run(void) {
 
     for (i = 0; i < br.num_trades; i++) {
         int exp_entry_bar = raw_offset + i + seq;
-        int exp_exit_bar  = exp_entry_bar + cfg.hold_bars;
+        int exp_exit_bar  = exp_entry_bar - 1 + cfg.hold_bars;
 
         ASSERT_INT(br.trades[i].entry_bar, exp_entry_bar);
         ASSERT_INT(br.trades[i].exit_bar, exp_exit_bar);
-        ASSERT_APPROX(br.trades[i].entry_price, raw[exp_entry_bar].open, 1e-15);
-        ASSERT_APPROX(br.trades[i].exit_price,  raw[exp_exit_bar].open,  1e-15);
+        ASSERT_APPROX(br.trades[i].entry_price, raw[exp_entry_bar - 1].close, 1e-15);
+        ASSERT_APPROX(br.trades[i].exit_price,  raw[exp_exit_bar].close,  1e-15);
     }
 
     backtest_free_result(&br);
     free(vol_preds);
     lstm_free(net);
     data_free_dataset(ds);
-    printf("T-B5 PASS: entry=raw[offset+i+seq].open, exit=raw[entry+hold].open, bars correct\n");
+    printf("T-B5 PASS: close-to-close — entry=raw[entry-1].close, exit=raw[entry-1+hold].close\n");
     return 0;
 }

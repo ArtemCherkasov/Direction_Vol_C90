@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.22.1)
 project(Direction_Vol_C90 C)
 
-set(CMAKE_C_STANDARD 90)
+set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_EXTENSIONS OFF)
 
 include_directories(include include/direction)
 
@@ -23,6 +24,7 @@ set(SOURCES
 
 add_executable(Direction_Vol_C90 ${SOURCES})
 target_link_libraries(Direction_Vol_C90 m)
+target_compile_options(Direction_Vol_C90 PRIVATE -Wall -Wextra -Wpedantic)
 
 # Unified test runner — all debug tests in one executable
 set(TEST_ALL_SOURCES
@@ -70,6 +72,7 @@ set(TEST_ALL_SOURCES
     tests/test_tb4.c
     tests/test_tb4b.c
     tests/test_tb5.c
+    tests/test_tb6.c
     tests/test_te1.c
     tests/test_te2.c
     tests/test_te3.c
@@ -83,3 +86,4 @@ set(TEST_ALL_SOURCES
 
 add_executable(test_all ${TEST_ALL_SOURCES})
 target_link_libraries(test_all m)
+target_compile_options(test_all PRIVATE -Wall -Wextra -Wpedantic)

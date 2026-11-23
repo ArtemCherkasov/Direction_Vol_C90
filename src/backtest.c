@@ -74,17 +74,18 @@ BacktestResult backtest_run(LSTMNetwork *net,
         /* Map test sample i to raw bar index.
          * Test sample i → full_ds sample (raw_offset + i).
          * Full_ds sample j has last feature bar at j + seq_len - 1.
-         * Target predicts: close[j+seq_len] vs close[j+seq_len-1].
-         * Entry at open of bar j+seq_len (the predicted bar).
-         * Exit at open of bar j+seq_len+hold_bars. */
+         * Label predicts: close[j+seq_len] vs close[j+seq_len-1].
+         *
+         * Close-to-close execution: entry at close of last feature bar (t),
+         * exit at close of bar t+hold_bars. This matches the label exactly:
+         * label = (close[t+1] > close[t]) for hold_bars=1, k=0.
+         * The model decides at close[t] (all features known) and enters at
+         * that same close — no look-ahead, no open/close mismatch. */
         entry_bar = raw_offset + i + seq_len;
         if (entry_bar >= num_raw) continue;
 
-        /* Permanent alignment guard: entry must be on the bar AFTER the last feature bar.
-         * Features for sample i span raw bars [raw_offset+i, raw_offset+i+seq_len-1].
-         * entry_bar = raw_offset + i + seq_len must equal last_feat_bar + 1.
-         * This guards against future regressions in the offset arithmetic. */
-        assert(entry_bar == (raw_offset + i + seq_len - 1) + 1);
+        int last_feat_bar = entry_bar - 1;
+        assert(last_feat_bar >= 0 && last_feat_bar < num_raw);
 
         vol_i = vol_predictions[i];
         if (vol_i < 1e-9) continue;  /* skip bars with zero/near-zero vol (holiday, flat) */
@@ -96,7 +97,7 @@ BacktestResult backtest_run(LSTMNetwork *net,
 
         /* Cost calculation — cost_spread is a direct fraction (e.g. 0.0001 = 1bp).
          * cost_fraction = spread + 2*commission (per round-trip). */
-        entry_price = raw[entry_bar].open;
+        entry_price = raw[last_feat_bar].close;
         cost_fraction = config->cost_spread + 2.0 * config->cost_commission;
 
         /* Vol cost filter: skip trade if expected movement (k·σ̂) doesn't cover costs.
@@ -112,10 +113,10 @@ BacktestResult backtest_run(LSTMNetwork *net,
             direction = -1; /* short */
         }
 
-        /* Exit */
-        exit_bar = entry_bar + config->hold_bars;
+        /* Exit at close of bar last_feat_bar + hold_bars */
+        exit_bar = last_feat_bar + config->hold_bars;
         if (exit_bar >= num_raw) continue;
-        exit_price = raw[exit_bar].open;
+        exit_price = raw[exit_bar].close;
 
         /* Position sizing (vol targeting) */
         position_size = config->target_risk / vol_i;
@@ -135,14 +136,6 @@ BacktestResult backtest_run(LSTMNetwork *net,
             - cost_fraction * position_size;
 
         n_trades++;
-
-        /* Dump trade for diagnostics */
-        printf("%s,%d,%.4f,%d,%d,%.6f,%.6f\n",
-               raw[entry_bar].date,
-               (int)all_targets[i], p, direction,
-               (result.trades[n_trades - 1].pnl_fraction > 0.0),
-               raw[entry_bar].close - raw[entry_bar - 1].close,
-               raw[exit_bar].open - raw[entry_bar].open);
     }
 
     result.num_trades = n_trades;
